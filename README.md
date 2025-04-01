@@ -22,12 +22,7 @@ git clone https://github.com/TicoDoido/all_for_one.git
 cd all-for-one
 ```
 
-2. Crie a pasta de plugins:  
-```bash
-mkdir plugins
-```
-
-3. Execute o aplicativo:  
+2. Execute o aplicativo:  
 ```bash
 ALL_FOR_ONE.py
 ```
