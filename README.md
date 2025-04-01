@@ -18,7 +18,7 @@ Uma aplicação GUI em Python para gerenciar e executar plugins de jogos de form
 
 1. Clone o repositório:  
 ```bash
-git clone https://github.com/seu-usuario/all-for-one.git
+git clone https://github.com/TicoDoido/all_for_one.git
 cd all-for-one
 ```
 
@@ -29,7 +29,7 @@ mkdir plugins
 
 3. Execute o aplicativo:  
 ```bash
-python main.py
+ALL_FOR_ONE.py
 ```
 
 ## 🧩 Criando Plugins  
