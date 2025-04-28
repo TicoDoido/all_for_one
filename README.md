@@ -54,7 +54,7 @@ def register_plugin():
 ```
 all-for-one/
 │
-├── main.py            # Código principal
+├── ALL_FOR_ONE.py     # Código principal
 ├── README.md          # Este arquivo
 └── plugins/           # Pasta para seus plugins
     ├── exemplo1.py    # Plugin de exemplo
