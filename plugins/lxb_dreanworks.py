@@ -100,10 +100,11 @@ def extrair_dados(caminho_arquivo, endianess):
             dados_modificados = b'[FIM]\n'.join(dados_extraidos) + b'[FIM]\n'
             nome_arquivo, _ = os.path.splitext(os.path.basename(caminho_arquivo))
             novo_caminho = os.path.join(os.path.dirname(caminho_arquivo), f"{nome_arquivo}.txt")
+            novo_caminho = os.path.normpath(novo_caminho)
             with open(novo_caminho, 'wb') as novo_arquivo:
                 novo_arquivo.write(dados_modificados)
             
-            print(f"Textos extraídos e salvos em {novo_caminho}")
+            messagebox.showinfo("Pronto", f"Textos extraídos e salvos em:\n {novo_caminho}")
     except Exception as e:
         messagebox.showerror("Erro", f"Erro ao processar o arquivo: {e}")
 
