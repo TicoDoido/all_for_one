@@ -2,7 +2,16 @@ import struct
 from tkinter import filedialog, messagebox
 import os
 
-def register_plugin():
+# no topo do seu plugin.py
+logger = print
+get_option = lambda name: None  # stub até receber do host
+
+def register_plugin(log_func, option_getter):
+    global logger, get_option
+    # atribui o logger e a função de consulta de opções vindos do host
+    logger     = log_func or print
+    get_option = option_getter or (lambda name: None)
+            
     return {
         "name": "COALESCED Arquivo Unreal Engine 3 PS3/XBOX 360/N. Switch",
         "description": "Extrai e recria arquivos COALESCED de jogos feitos na Unreal Engine 3 PS360/Switch. Altere o numero de linhas nos arquivos .ini ou .int por sua conta e risco...Recomendo apenas a sua edição",
@@ -46,7 +55,7 @@ def read_binary_file(file_path):
 
                 # Corrigir o caminho do arquivo, removendo componentes "..\..\" e padronizando
                 file_name = os.path.normpath(file_name.replace("..\\", "").replace("..\\", ""))
-                print(f"Extraindo arquivo: {file_name}")
+                logger(f"Extraindo arquivo: {file_name}")
 
                 # Criar caminho do arquivo para salvar
                 file_path_out = os.path.join(output_dir, file_name)
@@ -228,7 +237,7 @@ def rebuild_binary_file(original_file_path, output_file_path, extracted_folder):
                     raise FileNotFoundError(f"Arquivo extraído não encontrado: {file_path}")
 
                 with open(file_path, 'r', encoding='utf-8') as f:
-                    print(f"Remontando arquivo: {file_path}")
+                    logger(f"Remontando arquivo: {file_path}")
                     # Ler e processar os itens do arquivo extraído
                     content = f.read()
                     

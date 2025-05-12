@@ -1,7 +1,16 @@
 import os
 from tkinter import filedialog, messagebox
 
-def register_plugin():
+# no topo do seu plugin.py
+logger = print
+get_option = lambda name: None  # stub até receber do host
+
+def register_plugin(log_func, option_getter):
+    global logger, get_option
+    # atribui o logger e a função de consulta de opções vindos do host
+    logger     = log_func or print
+    get_option = option_getter or (lambda name: None)
+            
     return {
         "name": "CT3PACK Clock Tower 3(PS2)",
         "description": "Extrai e recria arquivo ct3pack.dat do jogo Clock Tower 3(PS2)",
@@ -52,7 +61,7 @@ def extract_file():
                     name = name_bytes.decode('utf-8').strip('\x00')
                     file_names.append(name)
                 except UnicodeDecodeError as e:
-                    print(f"Erro ao decodificar nome: {e} - Bytes lidos: {name_bytes}")
+                    logger(f"Erro ao decodificar nome: {e} - Bytes lidos: {name_bytes}")
                 f.seek(4, 1)
                 
                 size = f.read(4)
@@ -79,7 +88,7 @@ def extract_file():
                 # Adiciona o nome do arquivo extraído à lista
                 extracted_files.append(name)
                 
-                print(f"Arquivo extraído: {output_file_path}")
+                logger(f"Arquivo extraído: {output_file_path}")
             
             # Salva a lista de nomes no mesmo local do arquivo original
             with open(filelist_path, 'w', encoding='utf-8') as filelist_file:
@@ -163,4 +172,4 @@ def recreate_file():
         messagebox.showinfo("Sucesso", (f"Arquivo reconstruído salvo em: {recreated_file}"))
 
     except Exception as e:
-        print(f"Erro ao recriar arquivo: {e}")
+        logger(f"Erro ao recriar arquivo: {e}")

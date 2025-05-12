@@ -2,7 +2,16 @@ import os
 import struct
 import zlib
 
-def register_plugin():
+# no topo do seu plugin.py
+logger = print
+get_option = lambda name: None  # stub até receber do host
+
+def register_plugin(log_func, option_getter):
+    global logger, get_option
+    # atribui o logger e a função de consulta de opções vindos do host
+    logger     = log_func or print
+    get_option = option_getter or (lambda name: None)
+            
     return {
         "name": "CAT/MATCAT Arquivo FEAR 1 PS3/XBOX 360",
         "description": "Extrai e recria contêineres (.CAT/.MATCAT) FEAR 1",
@@ -68,7 +77,7 @@ def read_file_info(file_path):
                     with open(file_path, 'wb') as out_file:
                         out_file.write(data_to_write)
 
-                    print(f"Processado: {file_name}, Ponteiro: {hex(pointer).upper()}")
+                    logger(f"Processado: {file_name}, Posição: {hex(pointer).upper()}")
 
         messagebox.showinfo("Sucesso", "Arquivos extraídos com sucesso!")
     except Exception as e:
@@ -119,7 +128,7 @@ def recreate_file(file_path):
                         uncompressed_size = len(data)
                         if not uncompressed:
                             data = zlib.compress(data)
-                            print(f"Adicionando {file_name} comprimido.")
+                            logger(f"Adicionando {file_name} comprimido.")
 
                     compressed_size = len(data)  # Tamanho comprimido sem o padding
                     compressed_data = pad_to_32_bytes(data)

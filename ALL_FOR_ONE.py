@@ -5,11 +5,15 @@ import importlib.util
 import importlib
 import sys
 
+# Variáveis globais para armazenar opções de radio
+radio_vars = {}
+
+
 def load_plugin(plugin_name, plugin_dir="plugins"):
     """Carrega ou recarrega um plugin específico no momento da seleção."""
-    original_dont_write_bytecode = sys.dont_write_bytecode  # Salva o estado original
-    sys.dont_write_bytecode = True  # Desativa a criação de .pyc
-    
+    original_dont_write_bytecode = sys.dont_write_bytecode
+    sys.dont_write_bytecode = True
+
     plugin_path = os.path.join(plugin_dir, f"{plugin_name}.py")
     if not os.path.exists(plugin_path):
         messagebox.showerror("Erro", f"Plugin '{plugin_name}' não encontrado.")
@@ -22,17 +26,30 @@ def load_plugin(plugin_name, plugin_dir="plugins"):
         spec = importlib.util.spec_from_file_location(plugin_name, plugin_path)
         module = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(module)
-        
+
         sys.dont_write_bytecode = original_dont_write_bytecode
 
         if hasattr(module, "register_plugin"):
-            return module.register_plugin()
+            def get_option(name):
+                var = radio_vars.get(name)
+                return var.get() if var else None
+
+            plugin = module.register_plugin(log_message, get_option)
+
+            # Inicializa variáveis de radio se fornecidas pelo plugin
+            for opt in plugin.get("options", []):
+                name = opt["name"]
+                values = opt.get("values", [])
+                var = tk.StringVar(value=values[0] if values else "")
+                radio_vars[name] = var
+            return plugin
         else:
-            messagebox.showerror("Erro", f"O plugin '{plugin_name}' não possui a função 'register_plugin'.")
+            messagebox.showerror("Erro", f"O plugin '{plugin_name}' não possui register_plugin.")
             return None
     except Exception as e:
-        messagebox.showerror("Erro", f"Erro ao carregar plugin '{plugin_name}': {e}")
+        messagebox.showerror("Erro", f"Falha ao carregar plugin '{plugin_name}': {e}")
         return None
+
 
 def get_plugins_mapping(plugin_dir="plugins"):
     mapping = {}
@@ -40,11 +57,11 @@ def get_plugins_mapping(plugin_dir="plugins"):
         os.makedirs(plugin_dir)
     for filename in os.listdir(plugin_dir):
         if filename.endswith(".py"):
-            file_plugin_name = filename[:-3]
-            plugin_data = load_plugin(file_plugin_name, plugin_dir)
-            if plugin_data and "name" in plugin_data:
-                mapping[plugin_data["name"]] = file_plugin_name
+            data = load_plugin(filename[:-3], plugin_dir)
+            if data and "name" in data:
+                mapping[data["name"]] = filename[:-3]
     return mapping
+
 
 def log_message(message):
     global text_log
@@ -55,6 +72,7 @@ def log_message(message):
         text_log.see(tk.END)
     else:
         print(message)
+
 
 def main():
     global text_log
@@ -68,50 +86,59 @@ def main():
     style.configure("TLabel", font=("Arial", 12), background="#2c3e50", foreground="white")
 
     plugins_mapping = get_plugins_mapping()
-    plugin_display_names = list(plugins_mapping.keys())
+    plugin_names = list(plugins_mapping.keys())
 
-    title_label = ttk.Label(root, text="Selecione um Plugin", font=("Arial", 16, "bold"))
-    title_label.pack(pady=10)
+    ttk.Label(root, text="Selecione um Plugin", font=("Arial", 16, "bold"), background="#2c3e50", foreground="white").pack(pady=10)
 
-    plugin_selector = ttk.Combobox(root, values=plugin_display_names, state="readonly", width=60)
+    plugin_selector = ttk.Combobox(root, values=plugin_names, state="readonly", width=60)
     plugin_selector.set("Selecione um plugin")
     plugin_selector.pack(pady=10)
-
-    def load_selected_plugin():
-        selected_display_name = plugin_selector.get()
-        if not selected_display_name:
-            messagebox.showwarning("Atenção", "Selecione um plugin para carregar.")
-            return
-
-        plugin_file_name = plugins_mapping.get(selected_display_name)
-        if not plugin_file_name:
-            messagebox.showerror("Erro", f"Plugin '{selected_display_name}' não encontrado.")
-            return
-
-        log_message(f"Carregando plugin '{selected_display_name}'...")
-
-        for widget in commands_frame.winfo_children():
-            widget.destroy()
-
-        selected_plugin = load_plugin(plugin_file_name)
-        if selected_plugin:
-            log_message(f"Plugin '{selected_display_name}' carregado com sucesso.")
-            label = ttk.Label(commands_frame, text=selected_plugin["description"], font=("Arial", 12, "bold"), wraplength=680)
-            label.pack(pady=10)
-            for command in selected_plugin["commands"]:
-                button = ttk.Button(commands_frame, text=command["label"], command=command["action"])
-                button.pack(pady=5)
-        else:
-            log_message(f"Erro: Falha ao carregar '{selected_display_name}'.")
-
-    load_button = ttk.Button(root, text="Carregar Plugin", command=load_selected_plugin)
-    load_button.pack(pady=10)
 
     commands_frame = tk.Frame(root, bg="#34495e", padx=10, pady=10)
     commands_frame.pack(fill="both", expand=True, pady=10)
 
-    text_log = scrolledtext.ScrolledText(root, wrap=tk.WORD, state=tk.DISABLED, height=10, bg="#ecf0f1", font=("Arial", 10))
+    text_log = scrolledtext.ScrolledText(root, wrap=tk.WORD, state=tk.DISABLED, height=10,
+                                        bg="#ecf0f1", font=("Arial", 10))
     text_log.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
+
+    def load_selected_plugin():
+        sel = plugin_selector.get()
+        if not sel:
+            messagebox.showwarning("Atenção", "Selecione um plugin.")
+            return
+        plugin_file = plugins_mapping.get(sel)
+        log_message(f"Carregando '{sel}'...\n")
+
+        radio_vars.clear()
+        for w in commands_frame.winfo_children():
+            w.destroy()
+
+        plugin = load_plugin(plugin_file)
+        if not plugin:
+            log_message(f"Falha ao carregar '{sel}'.\n")
+            return
+
+        log_message(f"Plugin '{sel}' carregado!\n")
+
+        ttk.Label(commands_frame, text=plugin["description"], font=("Arial", 12, "bold"),
+                  background="#34495e", foreground="white", wraplength=660).pack(pady=10)
+
+        # Opções horizontais
+        for opt in plugin.get("options", []):
+            frame_opt = tk.Frame(commands_frame, bg="#34495e")
+            frame_opt.pack(anchor='w', pady=(5,10), padx=10)
+            ttk.Label(frame_opt, text=opt["label"], font=("Arial", 10, "bold"),
+                      background="#34495e", foreground="white").pack(side=tk.LEFT)
+            var = radio_vars[opt["name"]]
+            for val in opt.get("values", []):
+                ttk.Radiobutton(frame_opt, text=val, variable=var, value=val,
+                                style="TRadiobutton").pack(side=tk.LEFT, padx=10)
+
+        # Comandos
+        for cmd in plugin.get("commands", []):
+            ttk.Button(commands_frame, text=cmd["label"], command=cmd["action"]).pack(pady=5)
+
+    ttk.Button(root, text="Carregar Plugin", command=load_selected_plugin).pack(pady=10)
 
     root.mainloop()
 

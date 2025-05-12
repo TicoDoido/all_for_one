@@ -3,7 +3,16 @@ import struct
 from tkinter import filedialog, messagebox
 import zlib
 
-def register_plugin():
+# no topo do seu plugin.py
+logger = print
+get_option = lambda name: None  # stub até receber do host
+
+def register_plugin(log_func, option_getter):
+    global logger, get_option
+    # atribui o logger e a função de consulta de opções vindos do host
+    logger     = log_func or print
+    get_option = option_getter or (lambda name: None)
+            
     return {
         "name": "PAK|STR Avatar The Last Airbender, The Burning Earth(PS2)",
         "description": "Extrai e recria arquivos PAK|STR do jogo Avatar The Last Airbender|The Burning Earth|Into the Inferno de PS2. Alguns arquivos .STR tem alguns dados no final do mesmo e esses não podem ficar maiores que seu tamanho original ainda...",
@@ -163,7 +172,7 @@ def extrair_pak(arquivo_pak):
                 # Adicionar o nome do arquivo à lista
                 lista_arquivos_extraidos.append(nome_arquivo_descomprimido)
 
-                print(f"Arquivo '{caminho_completo}' extraído com sucesso.")
+                logger(f"Arquivo '{caminho_completo}' extraído com sucesso.")
 
     # Salvar a lista de arquivos extraídos em um arquivo .txt
     lista_txt = os.path.join(diretorio_arquivo, os.path.splitext(os.path.basename(arquivo_pak))[0] + '.txt')
@@ -173,7 +182,7 @@ def extrair_pak(arquivo_pak):
         for nome in lista_arquivos_extraidos:
             arquivo_lista.write(nome + '\n')
 
-    print(f"Lista de arquivos extraídos salva em '{lista_txt}'.")
+    logger(f"Lista de arquivos extraídos salva em '{lista_txt}'.")
 
 def escrever_little_endian(arquivo, valor):
     """Escreve um valor em formato little endian no arquivo."""
@@ -211,7 +220,7 @@ def recreate_file(arquivo_txt):
             # Ir até a posição 28 e ler o ponteiro de onde começar a inserção
             pak.seek(28)
             posicao_insercao = ler_little_endian(pak, 4)
-            print(f"Iniciando inserção a partir da posição: 0x{posicao_insercao:08X}")
+            logger(f"Iniciando inserção a partir da posição: 0x{posicao_insercao:08X}")
 
             # Ir até a posição de inserção
             pak.seek(posicao_insercao)
@@ -232,7 +241,7 @@ def recreate_file(arquivo_txt):
                 # Se o arquivo tiver '_descomprimido' no nome, comprimir os dados
                 if '_descomprimido' in nome_arquivo:
                     dados = zlib.compress(dados)
-                    print(f"O arquivo '{nome_arquivo}' foi comprimido.")
+                    logger(f"O arquivo '{nome_arquivo}' foi comprimido.")
 
                 # Salvar o tamanho comprimido
                 tamanho_comprimido = len(dados)
@@ -242,7 +251,7 @@ def recreate_file(arquivo_txt):
                 if tamanho_comprimido % 2048 != 0:
                     padding = 2048 - (tamanho_comprimido % 2048)
                     dados += b'\x00' * padding
-                    print(f"Padding adicionado ao arquivo '{nome_arquivo}'. Tamanho final: 0x{len(dados):08X} bytes")
+                    logger(f"Padding adicionado ao arquivo '{nome_arquivo}'. Tamanho final: 0x{len(dados):08X} bytes")
 
                 # Salvar o ponteiro de onde o arquivo será escrito
                 ponteiro_atual = pak.tell()
@@ -253,7 +262,7 @@ def recreate_file(arquivo_txt):
 
                 # Atualizar a posição de inserção para o próximo arquivo
                 posicao_insercao += len(dados)
-                print(f"Arquivo '{nome_arquivo}' inserido com sucesso na posição 0x{ponteiro_atual:08X}.")
+                logger(f"Arquivo '{nome_arquivo}' inserido com sucesso na posição 0x{ponteiro_atual:08X}.")
             
             pak.truncate()
 
@@ -285,7 +294,7 @@ def recreate_file(arquivo_txt):
             pak.seek(inicio_ponteiros)
             
             posicao_insercao = ler_little_endian(pak, 4)
-            print(f"Iniciando inserção a partir da posição: 0x{posicao_insercao:08X}")
+            logger(f"Iniciando inserção a partir da posição: 0x{posicao_insercao:08X}")
 
             # Ir até a posição de inserção
             pak.seek(posicao_insercao)
@@ -306,7 +315,7 @@ def recreate_file(arquivo_txt):
                 # Se o arquivo tiver '_descomprimido' no nome, comprimir os dados
                 if '_descomprimido' in nome_arquivo:
                     dados = zlib.compress(dados, level=9)
-                    print(f"O arquivo '{nome_arquivo}' foi comprimido.")
+                    logger(f"O arquivo '{nome_arquivo}' foi comprimido.")
 
                 # Salvar o tamanho comprimido
                 tamanho_comprimido = len(dados)
@@ -316,7 +325,7 @@ def recreate_file(arquivo_txt):
                 if tamanho_comprimido % 2048 != 0:
                     padding = 2048 - (tamanho_comprimido % 2048)
                     dados += b'\x00' * padding
-                    print(f"Padding adicionado ao arquivo '{nome_arquivo}'. Tamanho final: 0x{len(dados):08X} bytes")
+                    logger(f"Padding adicionado ao arquivo '{nome_arquivo}'. Tamanho final: 0x{len(dados):08X} bytes")
 
                 # Salvar o ponteiro de onde o arquivo será escrito
                 ponteiro_atual = pak.tell()
@@ -327,7 +336,7 @@ def recreate_file(arquivo_txt):
 
                 # Atualizar a posição de inserção para o próximo arquivo
                 posicao_insercao += len(dados)
-                print(f"Arquivo '{nome_arquivo}' inserido com sucesso na posição 0x{ponteiro_atual:08X}.")
+                logger(f"Arquivo '{nome_arquivo}' inserido com sucesso na posição 0x{ponteiro_atual:08X}.")
                 
             pak.truncate()
             
@@ -354,7 +363,7 @@ def recreate_file(arquivo_txt):
                 
                 pak.seek(12, 1)
 
-        print("Todos os arquivos foram reinseridos com sucesso.")
+        logger("Todos os arquivos foram reinseridos com sucesso.")
 
 
 def selecionar_arquivo():

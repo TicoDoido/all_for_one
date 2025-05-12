@@ -2,8 +2,16 @@ import struct
 import os
 import zlib
 from tkinter import filedialog, messagebox
+# no topo do seu plugin.py
+logger = print
+get_option = lambda name: None  # stub até receber do host
 
-def register_plugin():
+def register_plugin(log_func, option_getter):
+    global logger, get_option
+    # atribui o logger e a função de consulta de opções vindos do host
+    logger     = log_func or print
+    get_option = option_getter or (lambda name: None)
+            
     return {
         "name": "PACKED arquivos do jogo Clive Barker's Jericho...",
         "description": "Extrai e reinsere arquivos de containers .packed do jogo Clive Barker's Jericho.\nOs arquivos de texto desse jogo são apenas txt simples e a codificação é ANSI. \nO magic do arquivo é BFPK... versão 1.0 e talvez funcione em algum outro jogo.",
@@ -50,7 +58,7 @@ def extract_packed_container(container_path):
             # Salvar a posição atual no arquivo (para voltar ao cabeçalho depois)
             current_pos = f.tell()
             
-            print(f"Extraindo: {name}")
+            logger(f"Extraindo: {name}")
             
             # Ir para a posição do arquivo no container
             f.seek(file_offset)
@@ -137,7 +145,7 @@ def reinsert_files(container_path, input_dir):
             if not os.path.exists(input_file):
                 raise FileNotFoundError(f"Arquivo não encontrado: {input_file}")
             
-            print(f"Remontando arquivo: {input_file}")
+            logger(f"Remontando arquivo: {input_file}")
             with open(input_file, 'rb') as fin:
                 original_data = fin.read()
                 this_file_size = len(original_data)

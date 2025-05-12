@@ -3,7 +3,16 @@ import struct
 import xml.etree.ElementTree as ET
 import os
 
-def register_plugin():
+# no topo do seu plugin.py
+logger = print
+get_option = lambda name: None  # stub até receber do host
+
+def register_plugin(log_func, option_getter):
+    global logger, get_option
+    # atribui o logger e a função de consulta de opções vindos do host
+    logger     = log_func or print
+    get_option = option_getter or (lambda name: None)
+            
     return {
         "name": "XUS Arquivos de texto Xbox 360",
         "description": "Converte arquivos .xus para XML e faz reconversão. Util para localização de jogos.",

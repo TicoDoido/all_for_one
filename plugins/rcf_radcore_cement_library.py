@@ -2,13 +2,15 @@ import struct
 import os
 from tkinter import filedialog, messagebox, scrolledtext
 
-def register_plugin(log_func=None):
-    global log_message
-    if log_func:
-        log_message = log_func
-    else:
-        def log_message(message):
-            print(message)
+# no topo do seu plugin.py
+logger = print
+get_option = lambda name: None  # stub até receber do host
+
+def register_plugin(log_func, option_getter):
+    global logger, get_option
+    # atribui o logger e a função de consulta de opções vindos do host
+    logger     = log_func or print
+    get_option = option_getter or (lambda name: None)
 
     return {
         "name": "RCF Radcore Cement Library VER:1.2/2.1",
@@ -63,7 +65,7 @@ def recreate_rcf(original_file_path, txt_names_path):
         messagebox.showerror("Error", f"File {txt_names_path} not found!")
         return
 
-    log_message("Starting RCF file recreation...")
+    logger("Starting RCF file recreation...")
     
     with open(original_file_path, 'rb') as original_file:
         original_file.seek(32)
@@ -88,7 +90,7 @@ def recreate_rcf(original_file_path, txt_names_path):
 
         # Process version 1.2
         elif file_version == b'\x01\x02\x00\x01':
-            log_message("Version is 1.2\nLITTLE ENDIAN MODE.")
+            logger("Version is 1.2\nLITTLE ENDIAN MODE.")
             
             endian_format = '<'  # Define the endian format for version 1.2
             
@@ -125,7 +127,7 @@ def recreate_rcf(original_file_path, txt_names_path):
         with open(txt_names_path, 'r', encoding='utf-8') as txt_names:
             for line in txt_names:
                 file_name = line.lstrip("/\\").strip()  # Remove barras e espaços adicionais
-                log_message(f"Processed file name: {file_name}")
+                logger(f"Processed file name: {file_name}")
 
 
                 # Construct the full file path
@@ -134,9 +136,9 @@ def recreate_rcf(original_file_path, txt_names_path):
 
                 # Check if the file exists
                 if os.path.exists(file_path):
-                    log_message(f"File exists: {file_path}")
+                    logger(f"File exists: {file_path}")
                 else:
-                    log_message(f"File does not exist: {file_path}. Directory contents: {os.listdir(extracted_files_directory)}")
+                    logger(f"File does not exist: {file_path}. Directory contents: {os.listdir(extracted_files_directory)}")
 
 
                 # Process the file
@@ -153,7 +155,7 @@ def recreate_rcf(original_file_path, txt_names_path):
                 pointers.append((current_position, original_size))
                 current_position += size_with_padding
     
-                log_message(f"File {file_name} added successfully.")
+                logger(f"File {file_name} added successfully.")
     
         # Voltar e escrever os ponteiros e os tamanhos
         new_rcf.seek(32)
@@ -176,7 +178,7 @@ def recreate_rcf(original_file_path, txt_names_path):
                 new_rcf.write(struct.pack('<I', pointer))
                 new_rcf.write(struct.pack('<I', original_size))
     
-    log_message(f"New RCF file successfully created at: {new_rcf_path}")
+    logger(f"New RCF file successfully created at: {new_rcf_path}")
     messagebox.showinfo("DONE", f"New RCF file created at: {new_rcf_path}")
 
 def extract_files(file_path):
@@ -193,9 +195,9 @@ def extract_files(file_path):
     if not os.path.exists(extraction_directory):
         try:
             os.makedirs(extraction_directory)
-            log_message(f"Extraction directory created: {extraction_directory}")
+            logger(f"Extraction directory created: {extraction_directory}")
         except Exception as e:
-            log_message(f"Error creating extraction directory: {e}")
+            logger(f"Error creating extraction directory: {e}")
 
     with open(file_path, 'rb') as file:
         file.seek(32)
@@ -203,9 +205,9 @@ def extract_files(file_path):
         
         if file_version in [b'\x02\x01\x00\x01', b'\x02\x01\x01\x01']:
             if file_version == b'\x02\x01\x00\x01':
-                log_message("Version is 2.1\nLITTLE ENDIAN MODE")
+                logger("Version is 2.1\nLITTLE ENDIAN MODE")
             else:
-                log_message("Version is 2.1\nBIG ENDIAN MODE")
+                logger("Version is 2.1\nBIG ENDIAN MODE")
 
             file.seek(36)  # Move to the initial position of the pointers
             if file_version == b'\x02\x01\x00\x01':
@@ -252,7 +254,7 @@ def extract_files(file_path):
                     name = name_bytes.decode('utf-8').strip('\x00')
                     names.append(name)
                 except UnicodeDecodeError as e:
-                    log_message(f"Error decoding name: {e} - Bytes read: {name_bytes}")
+                    logger(f"Error decoding name: {e} - Bytes read: {name_bytes}")
 
                 file.seek(3, os.SEEK_CUR)
 
@@ -262,7 +264,7 @@ def extract_files(file_path):
                 
                 # Certifique-se de que o nome do arquivo seja válido
                 if i >= len(names) or not names[i].strip():
-                    log_message(f"Skipping unnamed file at index {i}.")
+                    logger(f"Skipping unnamed file at index {i}.")
                     continue
                 
                 # Corrigir o nome do arquivo para remover caminhos absolutos e normalizar
@@ -281,7 +283,7 @@ def extract_files(file_path):
                 with open(complete_path, 'wb') as f:
                     f.write(data)
                 
-                log_message(f"File {complete_path} extracted successfully.")
+                logger(f"File {complete_path} extracted successfully.")
 
 
             names_list_path = os.path.join(base_directory, f"{base_filename}.txt")
@@ -289,7 +291,7 @@ def extract_files(file_path):
                 for name in names:
                     names_list.write(name + '\n')
 
-            log_message(f"File list saved at: {names_list_path}")
+            logger(f"File list saved at: {names_list_path}")
 
         # Processo específico para a versão 01 02 00 01
         elif file_version == b'\x01\x02\x00\x01':
@@ -325,7 +327,7 @@ def extract_files(file_path):
                     name = name_bytes.decode('utf-8').strip('\x00')
                     names.append(name)
                 except UnicodeDecodeError as e:
-                    log_message(f"Error decoding name: {e} - Bytes read: {name_bytes}")
+                    logger(f"Error decoding name: {e} - Bytes read: {name_bytes}")
             
                 for i, (file_offset, file_size) in enumerate(pointers):
                     file.seek(file_offset)
@@ -333,7 +335,7 @@ def extract_files(file_path):
                 
                     # Certifique-se de que o nome do arquivo seja válido
                     if i >= len(names) or not names[i].strip():
-                        log_message(f"Skipping unnamed file at index {i}.")
+                        logger(f"Skipping unnamed file at index {i}.")
                         continue
                 
                     # Corrigir o nome do arquivo para remover caminhos absolutos e normalizar
@@ -352,7 +354,7 @@ def extract_files(file_path):
                     with open(complete_path, 'wb') as f:
                         f.write(data)
                 
-                    log_message(f"File {complete_path} extracted successfully.")
+                    logger(f"File {complete_path} extracted successfully.")
 
 
             names_list_path = os.path.join(base_directory, f"{base_filename}.txt")
@@ -361,7 +363,7 @@ def extract_files(file_path):
                 for name in names:
                     names_list.write(name + '\n')
 
-            log_message(f"File list saved at: {names_list_path}")
+            logger(f"File list saved at: {names_list_path}")
 
         else:
             messagebox.showerror("Error", "Unsupported file!")

@@ -2,7 +2,16 @@ import os
 import struct
 from tkinter import filedialog, messagebox
 
-def register_plugin():
+# no topo do seu plugin.py
+logger = print
+get_option = lambda name: None  # stub até receber do host
+
+def register_plugin(log_func, option_getter):
+    global logger, get_option
+    # atribui o logger e a função de consulta de opções vindos do host
+    logger     = log_func or print
+    get_option = option_getter or (lambda name: None)
+            
     return {
         "name": "FILES arquivos (Eternal Sonata PS3)",
         "description": "Extrai e recria textos de arquivos do jogo Eternal Sonata",
@@ -45,7 +54,7 @@ def extract_files_from_container(container_path):
                 with open(full_output_path, 'wb') as output_file:
                     output_file.write(file_data)
                 
-                print(f'Extraiu {filename} para {full_output_path}')
+                logger(f'Extraiu {filename} para {full_output_path}')
         
         messagebox.showinfo("Sucesso", "Arquivos extraídos com sucesso!")
     except Exception as e:

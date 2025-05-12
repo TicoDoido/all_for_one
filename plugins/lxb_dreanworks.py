@@ -2,7 +2,16 @@ from tkinter import filedialog, messagebox
 import struct
 import os
 
-def register_plugin():
+# no topo do seu plugin.py
+logger = print
+get_option = lambda name: None  # stub até receber do host
+
+def register_plugin(log_func, option_getter):
+    global logger, get_option
+    # atribui o logger e a função de consulta de opções vindos do host
+    logger     = log_func or print
+    get_option = option_getter or (lambda name: None)
+            
     return {
         "name": "LXB de texto de alguns jogos da DreamWorks(PS2, PS3, PC, Wii...)",
         "description": "Extrai e recria textos de arquivos .LXB de texto de alguns jogos DreamWorks como Kung Foo Panda ou Shrek Forever After",
@@ -24,10 +33,10 @@ def determinar_endianess(caminho_arquivo):
             
             # Determinar o endianness com base no valor esperado (5 para big-endian)
             if valor_be == 5:
-                print("Endianness detectado: Big-endian")
+                logger("Endianness detectado: Big-endian")
                 return '>'
             elif valor_le == 5:
-                print("Endianness detectado: Little-endian")
+                logger("Endianness detectado: Little-endian")
                 return '<'
             else:
                 raise ValueError("Cabeçalho do arquivo inválido ou desconhecido.")
@@ -79,7 +88,7 @@ def extrair_dados(caminho_arquivo, endianess):
                 novo_valor = posicao_atual + ponteiro
                 
                 if novo_valor >= os.path.getsize(caminho_arquivo):
-                    print(f"Ponteiro inválido: 0x{novo_valor:X} fora do tamanho do arquivo.")
+                    logger(f"Ponteiro inválido: 0x{novo_valor:X} fora do tamanho do arquivo.")
                     continue
                 
                 ponteiros.append(novo_valor)
@@ -114,10 +123,10 @@ def reinserir_dados(caminho_arquivo_txt, endianess):
         caminho_arquivo_lxb = os.path.join(os.path.dirname(caminho_arquivo_txt), f"{nome_arquivo}.lxb")
         
         if not os.path.exists(caminho_arquivo_lxb):
-            print(f"Erro: Arquivo LXB correspondente não encontrado: {caminho_arquivo_lxb}")
+            logger(f"Erro: Arquivo LXB correspondente não encontrado: {caminho_arquivo_lxb}")
             return
         
-        print(f"Processando arquivo TXT: {caminho_arquivo_txt}")
+        logger(f"Processando arquivo TXT: {caminho_arquivo_txt}")
         with open(caminho_arquivo_txt, 'rb') as file_txt:
             dados_modificados = file_txt.read()
         
@@ -168,4 +177,4 @@ def reinserir_dados(caminho_arquivo_txt, endianess):
                 file_lxb.write(struct.pack(endianess + 'I', novo_valor))
 
     except Exception as e:
-        print(f"Erro: {str(e)}")
+        logger(f"Erro: {str(e)}")
