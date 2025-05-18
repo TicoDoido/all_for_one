@@ -6,7 +6,7 @@ import sys
 import requests
 import subprocess
 
-# Configuração para atualização automática
+#### Configuração para atualização automática
 github_base = "https://raw.githubusercontent.com/TicoDoido/all_for_one/main"
 
 def baixar_arquivo(url):
