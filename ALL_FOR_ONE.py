@@ -3,7 +3,19 @@ from tkinter import ttk, messagebox, scrolledtext
 import os
 import importlib.util
 import sys
-import requests
+
+# Verifica e instala automaticamente o módulo 'requests' se não estiver disponível
+try:
+    import requests
+except ImportError:
+    import subprocess
+    try:
+        subprocess.check_call([sys.executable, '-m', 'pip', 'install', 'requests'])
+        import requests
+        messagebox.showinfo("Instalação", "Dependência 'requests' instalada com sucesso.")
+    except Exception as e:
+        messagebox.showerror("Erro", f"Falha ao instalar 'requests': {e}")
+        sys.exit(1)
 
 # Configuração para atualização automática
 GITHUB_RAW_BASE = "https://raw.githubusercontent.com/TicoDoido/all_for_one/main"
@@ -196,11 +208,4 @@ def main():
 
         # Comandos
         for cmd in plugin.get("commands", []):
-            ttk.Button(commands_frame, text=cmd["label"], command=cmd["action"]).pack(pady=5)
-
-    ttk.Button(root, text="Carregar Plugin", command=load_selected_plugin).pack(pady=10)
-
-    root.mainloop()
-
-if __name__ == "__main__":
-    main()
+            ttk.Button(commands_frame, text=cmd["label"], command=cmd["action"])
