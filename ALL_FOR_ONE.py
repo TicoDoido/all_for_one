@@ -3,78 +3,64 @@ from tkinter import ttk, messagebox, scrolledtext
 import os
 import importlib.util
 import sys
-
-# Verifica e instala automaticamente o módulo 'requests' se não estiver disponível
-try:
-    import requests
-except ImportError:
-    import subprocess
-    try:
-        subprocess.check_call([sys.executable, '-m', 'pip', 'install', 'requests'])
-        import requests
-        messagebox.showinfo("Instalação", "Dependência 'requests' instalada com sucesso.")
-    except Exception as e:
-        messagebox.showerror("Erro", f"Falha ao instalar 'requests': {e}")
-        sys.exit(1)
+import requests
+import subprocess
 
 # Configuração para atualização automática
-GITHUB_RAW_BASE = "https://raw.githubusercontent.com/TicoDoido/all_for_one/main"
+github_base = "https://raw.githubusercontent.com/TicoDoido/all_for_one/main"
 
 def baixar_arquivo(url):
-    """Baixa o conteúdo de um arquivo no GitHub raw."""
+    # Baixa o conteúdo de um arquivo no GitHub raw.
     try:
-        resposta = requests.get(url)
-        if resposta.status_code == 200:
-            return resposta.text
-    except Exception as e:
-        print(f"Erro ao baixar {url}: {e}")
+        resp = requests.get(url)
+        if resp.status_code == 200:
+            return resp.text
+    except Exception:
+        pass
     return None
 
 
 def atualizar_arquivo_if_needed(local_path, github_url):
-    """Compara e atualiza o arquivo local se houver diferença no repositório."""
+    # Compara e atualiza o arquivo local se houver diferença.
     conteudo_remoto = baixar_arquivo(github_url)
     if conteudo_remoto is None:
         return False
-
-    # Se o arquivo existir, compara
-    if os.path.exists(local_path):
+    # lê local se existir
+    local_exists = os.path.exists(local_path)
+    conteudo_local = ""
+    if local_exists:
         with open(local_path, 'r', encoding='utf-8') as f:
             conteudo_local = f.read()
-        if conteudo_local == conteudo_remoto:
-            return False  # Sem mudanças
-    else:
-        # Cria diretórios necessários
+    if conteudo_local != conteudo_remoto:
         os.makedirs(os.path.dirname(local_path), exist_ok=True)
-
-    # Escreve nova versão
-    with open(local_path, 'w', encoding='utf-8') as f:
-        f.write(conteudo_remoto)
-    print(f"Arquivo atualizado: {local_path}")
-    return True
+        with open(local_path, 'w', encoding='utf-8') as f:
+            f.write(conteudo_remoto)
+        return True
+    return False
 
 
-def verificar_e_atualizar_arquivos():
-    """Verifica todos os arquivos principais e plugins e atualiza automaticamente."""
-    arquivos = ["ALL_FOR_ONE.py"]
-    plugin_dir = "plugins"
-    if os.path.isdir(plugin_dir):
-        for file in os.listdir(plugin_dir):
-            if file.endswith(".py"):
-                arquivos.append(os.path.join(plugin_dir, file))
-
+def verificar_e_atualizar(root):
+    # Evita janela piscando
+    root.withdraw()
+    arquivos = ['ALL_FOR_ONE.py']
+    pdir = 'plugins'
+    if os.path.isdir(pdir):
+        for f in os.listdir(pdir):
+            if f.endswith('.py'):
+                arquivos.append(os.path.join(pdir, f))
     atualizou = False
-    for caminho in arquivos:
-        url = f"{GITHUB_RAW_BASE}/{caminho}"
-        if atualizar_arquivo_if_needed(caminho, url):
+    for cam in arquivos:
+        url = f"{github_base}/{cam}"
+        if atualizar_arquivo_if_needed(cam, url):
             atualizou = True
-
     if atualizou:
-        messagebox.showinfo("Atualização", "Arquivos atualizados! Reinicie o programa.")
+        messagebox.showinfo('Atualização', 'Arquivos atualizados. Reinicie o programa.')
+        root.destroy()
         sys.exit(0)
+    root.deiconify()
 
+# globals
 # Variáveis globais para armazenar opções de radio
-global radio_vars
 radio_vars = {}
 
 
@@ -144,9 +130,6 @@ def log_message(message):
 
 
 def main():
-    # Verifica e atualiza antes de iniciar a interface
-    verificar_e_atualizar_arquivos()
-
     global text_log
     root = tk.Tk()
     root.title("All For One - Gerenciador de PLUGINS para JOGOS")
