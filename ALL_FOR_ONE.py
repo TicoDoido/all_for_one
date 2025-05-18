@@ -200,7 +200,7 @@ def main():
             frame_opt = tk.Frame(commands_frame, bg="#34495e")
             frame_opt.pack(anchor='w', pady=(5,10), padx=10)
             ttk.Label(frame_opt, text=opt["label"], font=("Arial", 10, "bold"),
-                      background="#34495ce", foreground="white").pack(side=tk.LEFT)
+                      background="#34495e", foreground="white").pack(side=tk.LEFT)
             var = radio_vars[opt["name"]]
             for val in opt.get("values", []):
                 ttk.Radiobutton(frame_opt, text=val, variable=var, value=val,
@@ -208,4 +208,11 @@ def main():
 
         # Comandos
         for cmd in plugin.get("commands", []):
-            ttk.Button(commands_frame, text=cmd["label"], command=cmd["action"])
+            ttk.Button(commands_frame, text=cmd["label"], command=cmd["action"]).pack(pady=5)
+
+    ttk.Button(root, text="Carregar Plugin", command=load_selected_plugin).pack(pady=10)
+
+    root.mainloop()
+
+if __name__ == "__main__":
+    main()
