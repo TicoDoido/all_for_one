@@ -15,6 +15,13 @@ def register_plugin(log_func, option_getter):
     return {
         "name": "COALESCED Arquivo Unreal Engine 3 PS3/XBOX 360/N. Switch",
         "description": "Extrai e recria arquivos COALESCED de jogos feitos na Unreal Engine 3 PS360/Switch. Altere o numero de linhas nos arquivos .ini ou .int por sua conta e risco...Recomendo apenas a sua edição",
+        "options": [
+            {
+                "name": "tipo_arquivo",
+                "label": "Versão",
+                "values": ["1.0", "2.0/3.0"]
+            }
+        ],
         "commands": [
             {"label": "Extrair Arquivo", "action": process_file},
             {"label": "Reconstruir Arquivo", "action": reprocess_file},
@@ -22,116 +29,158 @@ def register_plugin(log_func, option_getter):
     }
 
 def read_binary_file(file_path):
-    try:
-        def read_name(file, char_count):
-            name_length = char_count * 2 + 2  # Multiplicar por 2 para UTF-16LE + 2 pelo endstring
-            name_data = file.read(name_length)
-            return name_data.decode('utf-16le').rstrip('\x00')
-
-        output_dir = os.path.splitext(file_path)[0]
-        os.makedirs(output_dir, exist_ok=True)
-
-        with open(file_path, 'rb') as f:
-            
-            endiam_check = f.read(2)
-            if endiam_check == b'\x00\x00':
-                endianess = '>'
-                ordem_dos_bytes = 'big'
-            else:
-                endianess = '<'
-                ordem_dos_bytes = 'little'
-            f.seek(-2, 1)
-            
-            
-            # Ler os primeiros 4 bytes para o número total de arquivos
-            total_files = struct.unpack(endianess + 'I', f.read(4))[0]
-
-            for _ in range(total_files):
-                # Ler o número de caracteres do nome do arquivo
-                char_count_bytes = f.read(4)
-                raw_value = int.from_bytes(char_count_bytes, byteorder=ordem_dos_bytes)
-                char_count = 4294967295 - raw_value # 4294967295 = FF FF FF FF
-                file_name = read_name(f, char_count)
-
-                # Corrigir o caminho do arquivo, removendo componentes "..\..\" e padronizando
-                file_name = os.path.normpath(file_name.replace("..\\", "").replace("..\\", ""))
-                logger(f"Extraindo arquivo: {file_name}")
-
-                # Criar caminho do arquivo para salvar
-                file_path_out = os.path.join(output_dir, file_name)
-                os.makedirs(os.path.dirname(file_path_out), exist_ok=True)  # Garantir diretório
-
-                # Ler o número de itens no arquivo de texto
-                num_items = struct.unpack(endianess + 'I', f.read(4))[0]
-
-                items = []
-                for _ in range(num_items):
-                    # Ler o número de caracteres do nome do item
-                    char_count_bytes_item = f.read(4)
-                    raw_value_item = int.from_bytes(char_count_bytes_item, byteorder=ordem_dos_bytes)
-                    char_count_item = 4294967295 - raw_value_item
-                    item_name = read_name(f, char_count_item)
-
-                    # Ler o número de subitens no item
-                    num_subitems = struct.unpack(endianess + 'I', f.read(4))[0]  # Big endian
-
-                    subitems = []
-                    for _ in range(num_subitems):
-                        # Ler o número de caracteres do nome do subitem 1
-                        char_count_bytes_sub_item1 = f.read(4)
-                        raw_value_sub_item1 = int.from_bytes(char_count_bytes_sub_item1, byteorder=ordem_dos_bytes)
-                        if raw_value_sub_item1 == 0:
-                            sub_item_1 = ""
-                        else:
-                            char_count_sub_item1 = 4294967295 - raw_value_sub_item1
-                            sub_item_1 = read_name(f, char_count_sub_item1)
-
-                        # Ler o número de caracteres do nome do subitem 2
-                        char_count_bytes_sub_item2 = f.read(4)
-                        raw_value_sub_item2 = int.from_bytes(char_count_bytes_sub_item2, byteorder=ordem_dos_bytes)
-                        if raw_value_sub_item2 == 0:
-                            sub_item_2 = ""
-                        else:
-                            char_count_sub_item2 = 4294967295 - raw_value_sub_item2
-                            sub_item_2 = read_name(f, char_count_sub_item2)
-
-                        subitems.append((sub_item_1, sub_item_2))
-
-                    items.append((item_name, subitems))
-
-                # Salvar conteúdo em arquivos
-                with open(file_path_out, 'w', encoding='utf-8') as out_file:
-                    total_items = len(items)
-                   
-                    for index, (item_name, subitems) in enumerate(items):
-                        total_subitems = len(subitems)
-                        if index > 0:
+    
+    tipo = get_option("tipo_arquivo")
+    
+    if tipo == "1.0":
+        
+            with open(file_path, 'rb') as f:
+                output_base_dir = os.path.splitext(file_path)[0]
+                f.seek(4)  # Posição inicial dos arquivos
+                print(output_base_dir)
+        
+                while True:
+                    # Ler tamanho do nome do arquivo
+                    filename_length_data = f.read(4)
+                    if not filename_length_data:
+                        break  # Fim do arquivo
+                    
+                    filename_length = struct.unpack('>I', filename_length_data)[0]
+                    filename_data = f.read(filename_length)
+                    filename = filename_data.strip(b'\x00').decode('utf-8')
+                
+                    # Criar estrutura de diretórios segura
+                    safe_path = os.path.join(output_base_dir, filename.lstrip('..\\'))
+                    full_path = os.path.abspath(safe_path)
+                    os.makedirs(os.path.dirname(full_path), exist_ok=True)
+                
+                    # Processar itens do arquivo
+                    num_items = struct.unpack('>I', f.read(4))[0]
+                    file_content = []
+                
+                    # Escrever arquivo extraído
+                    with open(full_path, 'w', encoding='utf-8') as out_file:
+                
+                        for _ in range(num_items):
+                            # Item name
+                            item_name_length = struct.unpack('>I', f.read(4))[0]
+                            item_name = f.read(item_name_length).strip(b'\x00').decode('utf-8')
                             out_file.write(f"[{item_name}]\n")
-                            for i, (sub_item_1, sub_item_2) in enumerate(subitems):
-                            
-                                sub_item_2 = sub_item_2.replace("\n", "\\n")
-                                sub_item_2 = sub_item_2.replace("\r", "\\r")
-                                total_items_subitems = len(subitems)
-                                out_file.write(f"{sub_item_1}=")
-                                if index < total_items -1:
-                                    out_file.write(f"{sub_item_2}\n")
-                                else:
-                                    if i < total_items_subitems -1:
-                                        out_file.write(f"{sub_item_2}\n")
-                                    else:
-                                        out_file.write(f"{sub_item_2}")
+                    
+                            # Subitens
+                            num_subitems = struct.unpack('>I', f.read(4))[0]
+                            subitems = []
                         
-                            # Apenas adicione a quebra de linha se não for o último item
-                            if index < total_items -1:
+                            for i in range(num_subitems):
+                                # Subitem title
+                                subitem_title_length = struct.unpack('>I', f.read(4))[0]
+                                subitem_title = f.read(subitem_title_length).strip(b'\x00').decode('utf-8')
+                            
+                                # Subitem value
+                                subitem_value_length = struct.unpack('>I', f.read(4))[0]
+                                subitem_value = f.read(subitem_value_length).strip(b'\x00').decode('utf-8', errors='ignore')
+                            
+                                
+                                out_file.write(f"{subitem_title}={subitem_value}\n")
+                                
+                            if _ + 1 < (num_items):
                                 out_file.write(f"\n")
-                                    
-                        else:
-                            if total_subitems > 0:
+                    
+                    
+                    logger(f"Arquivo extraído: {full_path}")
+            messagebox.showinfo("PRONTO !!!", f"Extração bem sucedida")
+                
+                
+    else:           
+        try:
+            def read_name(file, char_count):
+                name_length = char_count * 2 + 2  # Multiplicar por 2 para UTF-16LE + 2 pelo endstring
+                name_data = file.read(name_length)
+                return name_data.decode('utf-16le').rstrip('\x00')
+    
+            output_dir = os.path.splitext(file_path)[0]
+            os.makedirs(output_dir, exist_ok=True)
+    
+            with open(file_path, 'rb') as f:
+                
+                endiam_check = f.read(2)
+                if endiam_check == b'\x00\x00':
+                    endianess = '>'
+                    ordem_dos_bytes = 'big'
+                else:
+                    endianess = '<'
+                    ordem_dos_bytes = 'little'
+                f.seek(-2, 1)
+                
+                
+                # Ler os primeiros 4 bytes para o número total de arquivos
+                total_files = struct.unpack(endianess + 'I', f.read(4))[0]
+    
+                for _ in range(total_files):
+                    # Ler o número de caracteres do nome do arquivo
+                    char_count_bytes = f.read(4)
+                    raw_value = int.from_bytes(char_count_bytes, byteorder=ordem_dos_bytes)
+                    char_count = 4294967295 - raw_value # 4294967295 = FF FF FF FF
+                    file_name = read_name(f, char_count)
+    
+                    # Corrigir o caminho do arquivo, removendo componentes "..\..\" e padronizando
+                    file_name = os.path.normpath(file_name.replace("..\\", "").replace("..\\", ""))
+                    logger(f"Extraindo arquivo: {file_name}")
+    
+                    # Criar caminho do arquivo para salvar
+                    file_path_out = os.path.join(output_dir, file_name)
+                    os.makedirs(os.path.dirname(file_path_out), exist_ok=True)  # Garantir diretório
+    
+                    # Ler o número de itens no arquivo de texto
+                    num_items = struct.unpack(endianess + 'I', f.read(4))[0]
+    
+                    items = []
+                    for _ in range(num_items):
+                        # Ler o número de caracteres do nome do item
+                        char_count_bytes_item = f.read(4)
+                        raw_value_item = int.from_bytes(char_count_bytes_item, byteorder=ordem_dos_bytes)
+                        char_count_item = 4294967295 - raw_value_item
+                        item_name = read_name(f, char_count_item)
+    
+                        # Ler o número de subitens no item
+                        num_subitems = struct.unpack(endianess + 'I', f.read(4))[0]  # Big endian
+    
+                        subitems = []
+                        for _ in range(num_subitems):
+                            # Ler o número de caracteres do nome do subitem 1
+                            char_count_bytes_sub_item1 = f.read(4)
+                            raw_value_sub_item1 = int.from_bytes(char_count_bytes_sub_item1, byteorder=ordem_dos_bytes)
+                            if raw_value_sub_item1 == 0:
+                                sub_item_1 = ""
+                            else:
+                                char_count_sub_item1 = 4294967295 - raw_value_sub_item1
+                                sub_item_1 = read_name(f, char_count_sub_item1)
+    
+                            # Ler o número de caracteres do nome do subitem 2
+                            char_count_bytes_sub_item2 = f.read(4)
+                            raw_value_sub_item2 = int.from_bytes(char_count_bytes_sub_item2, byteorder=ordem_dos_bytes)
+                            if raw_value_sub_item2 == 0:
+                                sub_item_2 = ""
+                            else:
+                                char_count_sub_item2 = 4294967295 - raw_value_sub_item2
+                                sub_item_2 = read_name(f, char_count_sub_item2)
+    
+                            subitems.append((sub_item_1, sub_item_2))
+    
+                        items.append((item_name, subitems))
+    
+                    # Salvar conteúdo em arquivos
+                    with open(file_path_out, 'w', encoding='utf-8') as out_file:
+                        total_items = len(items)
+                    
+                        for index, (item_name, subitems) in enumerate(items):
+                            total_subitems = len(subitems)
+                            if index > 0:
                                 out_file.write(f"[{item_name}]\n")
                                 for i, (sub_item_1, sub_item_2) in enumerate(subitems):
-                            
-                                    sub_item_2 = sub_item_2.replace("\n", "\\n") # Trocar quebra de linha 
-                                    sub_item_2 = sub_item_2.replace("\r", "\\r") # por algum simbolo ?
+                                
+                                    sub_item_2 = sub_item_2.replace("\n", "\\n")
+                                    sub_item_2 = sub_item_2.replace("\r", "\\r")
                                     total_items_subitems = len(subitems)
                                     out_file.write(f"{sub_item_1}=")
                                     if index < total_items -1:
@@ -141,25 +190,46 @@ def read_binary_file(file_path):
                                             out_file.write(f"{sub_item_2}\n")
                                         else:
                                             out_file.write(f"{sub_item_2}")
+                            
                                 # Apenas adicione a quebra de linha se não for o último item
                                 if index < total_items -1:
                                     out_file.write(f"\n")
-
-
+                                        
                             else:
-                                if total_items > 1:
-                                    out_file.write(f"[{item_name}]\n\n")
+                                if total_subitems > 0:
+                                    out_file.write(f"[{item_name}]\n")
+                                    for i, (sub_item_1, sub_item_2) in enumerate(subitems):
+                                
+                                        sub_item_2 = sub_item_2.replace("\n", "\\n") # Trocar quebra de linha 
+                                        sub_item_2 = sub_item_2.replace("\r", "\\r") # por algum simbolo ?
+                                        total_items_subitems = len(subitems)
+                                        out_file.write(f"{sub_item_1}=")
+                                        if index < total_items -1:
+                                            out_file.write(f"{sub_item_2}\n")
+                                        else:
+                                            if i < total_items_subitems -1:
+                                                out_file.write(f"{sub_item_2}\n")
+                                            else:
+                                                out_file.write(f"{sub_item_2}")
+                                    # Apenas adicione a quebra de linha se não for o último item
+                                    if index < total_items -1:
+                                        out_file.write(f"\n")
+    
+    
                                 else:
-                                    out_file.write(f"[{item_name}]")
+                                    if total_items > 1:
+                                        out_file.write(f"[{item_name}]\n\n")
+                                    else:
+                                        out_file.write(f"[{item_name}]")
                             
                                 
 
 
-        messagebox.showinfo("PRONTO !!!", f"Extração bem sucedida")
+            messagebox.showinfo("PRONTO !!!", f"Extração bem sucedida")
 
-    except Exception as e:
-        messagebox.showerror("Erro", f"Ocorreu um erro ao processar o arquivo: {e}")
-        return None
+        except Exception as e:
+            messagebox.showerror("Erro", f"Ocorreu um erro ao processar o arquivo: {e}")
+            return None
         
 def rebuild_binary_file(original_file_path, output_file_path, extracted_folder):
     try:

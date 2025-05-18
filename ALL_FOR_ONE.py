@@ -2,10 +2,67 @@ import tkinter as tk
 from tkinter import ttk, messagebox, scrolledtext
 import os
 import importlib.util
-import importlib
 import sys
+import requests
+
+# Configuração para atualização automática
+GITHUB_RAW_BASE = "https://raw.githubusercontent.com/TicoDoido/all_for_one/main"
+
+def baixar_arquivo(url):
+    """Baixa o conteúdo de um arquivo no GitHub raw."""
+    try:
+        resposta = requests.get(url)
+        if resposta.status_code == 200:
+            return resposta.text
+    except Exception as e:
+        print(f"Erro ao baixar {url}: {e}")
+    return None
+
+
+def atualizar_arquivo_if_needed(local_path, github_url):
+    """Compara e atualiza o arquivo local se houver diferença no repositório."""
+    conteudo_remoto = baixar_arquivo(github_url)
+    if conteudo_remoto is None:
+        return False
+
+    # Se o arquivo existir, compara
+    if os.path.exists(local_path):
+        with open(local_path, 'r', encoding='utf-8') as f:
+            conteudo_local = f.read()
+        if conteudo_local == conteudo_remoto:
+            return False  # Sem mudanças
+    else:
+        # Cria diretórios necessários
+        os.makedirs(os.path.dirname(local_path), exist_ok=True)
+
+    # Escreve nova versão
+    with open(local_path, 'w', encoding='utf-8') as f:
+        f.write(conteudo_remoto)
+    print(f"Arquivo atualizado: {local_path}")
+    return True
+
+
+def verificar_e_atualizar_arquivos():
+    """Verifica todos os arquivos principais e plugins e atualiza automaticamente."""
+    arquivos = ["ALL_FOR_ONE.py"]
+    plugin_dir = "plugins"
+    if os.path.isdir(plugin_dir):
+        for file in os.listdir(plugin_dir):
+            if file.endswith(".py"):
+                arquivos.append(os.path.join(plugin_dir, file))
+
+    atualizou = False
+    for caminho in arquivos:
+        url = f"{GITHUB_RAW_BASE}/{caminho}"
+        if atualizar_arquivo_if_needed(caminho, url):
+            atualizou = True
+
+    if atualizou:
+        messagebox.showinfo("Atualização", "Arquivos atualizados! Reinicie o programa.")
+        sys.exit(0)
 
 # Variáveis globais para armazenar opções de radio
+global radio_vars
 radio_vars = {}
 
 
@@ -75,6 +132,9 @@ def log_message(message):
 
 
 def main():
+    # Verifica e atualiza antes de iniciar a interface
+    verificar_e_atualizar_arquivos()
+
     global text_log
     root = tk.Tk()
     root.title("All For One - Gerenciador de PLUGINS para JOGOS")
@@ -128,7 +188,7 @@ def main():
             frame_opt = tk.Frame(commands_frame, bg="#34495e")
             frame_opt.pack(anchor='w', pady=(5,10), padx=10)
             ttk.Label(frame_opt, text=opt["label"], font=("Arial", 10, "bold"),
-                      background="#34495e", foreground="white").pack(side=tk.LEFT)
+                      background="#34495ce", foreground="white").pack(side=tk.LEFT)
             var = radio_vars[opt["name"]]
             for val in opt.get("values", []):
                 ttk.Radiobutton(frame_opt, text=val, variable=var, value=val,

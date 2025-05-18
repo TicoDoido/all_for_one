@@ -104,6 +104,7 @@ def extrair_dados(caminho_arquivo, endianess):
                     bloco_dados.append(byte)
                 
                 bloco_dados = b''.join(bloco_dados)
+                bloco_dados = bloco_dados.replace(b'\x09', b'[TAB]')
                 dados_extraidos.append(bloco_dados)
 
             dados_modificados = b'[FIM]\n'.join(dados_extraidos) + b'[FIM]\n'
@@ -131,6 +132,8 @@ def reinserir_dados(caminho_arquivo_txt, endianess):
             dados_modificados = file_txt.read()
         
         dados_extraidos = dados_modificados.replace(b'[FIM]\n', b'\x00')
+        dados_extraidos = dados_extraidos.replace(b'[TAB]', b'\x09')
+        dados_extraidos = dados_extraidos.replace(b'[tab]', b'\x09')
         blocos_dados = dados_extraidos.split(b'\x00')
         if blocos_dados[-1] == b'':
             blocos_dados.pop()
