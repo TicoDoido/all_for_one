@@ -2,64 +2,9 @@ import tkinter as tk
 from tkinter import ttk, messagebox, scrolledtext
 import os
 import importlib.util
+import importlib
 import sys
-import requests
-import subprocess
 
-#### Configuração para atualização automática
-github_base = "https://raw.githubusercontent.com/TicoDoido/all_for_one/main"
-
-def baixar_arquivo(url):
-    # Baixa o conteúdo de um arquivo no GitHub raw.
-    try:
-        resp = requests.get(url)
-        if resp.status_code == 200:
-            return resp.text
-    except Exception:
-        pass
-    return None
-
-
-def atualizar_arquivo_if_needed(local_path, github_url):
-    # Compara e atualiza o arquivo local se houver diferença.
-    conteudo_remoto = baixar_arquivo(github_url)
-    if conteudo_remoto is None:
-        return False
-    # lê local se existir
-    local_exists = os.path.exists(local_path)
-    conteudo_local = ""
-    if local_exists:
-        with open(local_path, 'r', encoding='utf-8') as f:
-            conteudo_local = f.read()
-    if conteudo_local != conteudo_remoto:
-        os.makedirs(os.path.dirname(local_path), exist_ok=True)
-        with open(local_path, 'w', encoding='utf-8') as f:
-            f.write(conteudo_remoto)
-        return True
-    return False
-
-
-def verificar_e_atualizar(root):
-    # Evita janela piscando
-    root.withdraw()
-    arquivos = ['ALL_FOR_ONE.py']
-    pdir = 'plugins'
-    if os.path.isdir(pdir):
-        for f in os.listdir(pdir):
-            if f.endswith('.py'):
-                arquivos.append(os.path.join(pdir, f))
-    atualizou = False
-    for cam in arquivos:
-        url = f"{github_base}/{cam}"
-        if atualizar_arquivo_if_needed(cam, url):
-            atualizou = True
-    if atualizou:
-        messagebox.showinfo('Atualização', 'Arquivos atualizados. Reinicie o programa.')
-        root.destroy()
-        sys.exit(0)
-    root.deiconify()
-
-# globals
 # Variáveis globais para armazenar opções de radio
 radio_vars = {}
 
