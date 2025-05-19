@@ -1,6 +1,9 @@
 import struct
 import os
 from tkinter import filedialog, messagebox, scrolledtext
+import threading
+
+
 
 # no topo do seu plugin.py
 logger = print
@@ -17,7 +20,7 @@ def register_plugin(log_func, option_getter):
         "description": "Extrai e recria arquivos RCF de jogos da Radical Entertainment",
         "commands": [
             {"label": "Extrair Arquivo", "action": select_file},
-            {"label": "Recriar Arquivo", "action": select_rcf_file}
+            {"label": "Recriar Arquivo", "action": start_rcf_recreation}
         ]
     }
 
@@ -33,16 +36,20 @@ def calculate_padding(size, allocation=512):
         return size
     return ((size // allocation) + 1) * allocation
 
-def select_rcf_file():
+def start_rcf_recreation():
+    #threading.Thread(target=recreate_rcf, args=(caminho_arquivo, caminho_txt), daemon=True).start()
     rcf_path = filedialog.askopenfilename(filetypes=[("RCF Files", "*.rcf")])
-    if rcf_path:
-        select_txt_file(rcf_path)
+    if not rcf_path:
+        return
 
-def select_txt_file(rcf_path):
     base_filename = os.path.splitext(os.path.basename(rcf_path))[0]
     txt_path = filedialog.askopenfilename(filetypes=[("Text Files", "*.txt")], initialfile=f"{base_filename}.txt")
-    if txt_path:
-        recreate_rcf(rcf_path, txt_path)
+    if not txt_path:
+        return
+
+    #recreate_rcf(rcf_path, txt_path)
+    threading.Thread(target=recreate_rcf, args=(rcf_path, txt_path), daemon=True).start()
+
 
 def recreate_rcf(original_file_path, txt_names_path):
     base_filename = os.path.splitext(os.path.basename(original_file_path))[0]
@@ -127,7 +134,6 @@ def recreate_rcf(original_file_path, txt_names_path):
         with open(txt_names_path, 'r', encoding='utf-8') as txt_names:
             for line in txt_names:
                 file_name = line.lstrip("/\\").strip()  # Remove barras e espaços adicionais
-                logger(f"Processed file name: {file_name}")
 
 
                 # Construct the full file path
@@ -136,7 +142,7 @@ def recreate_rcf(original_file_path, txt_names_path):
 
                 # Check if the file exists
                 if os.path.exists(file_path):
-                    logger(f"File exists: {file_path}")
+                    logger(f"File OK: {file_path}")
                 else:
                     logger(f"File does not exist: {file_path}. Directory contents: {os.listdir(extracted_files_directory)}")
 
@@ -154,8 +160,7 @@ def recreate_rcf(original_file_path, txt_names_path):
                 # Armazenar o ponteiro e o tamanho original
                 pointers.append((current_position, original_size))
                 current_position += size_with_padding
-    
-                logger(f"File {file_name} added successfully.")
+
     
         # Voltar e escrever os ponteiros e os tamanhos
         new_rcf.seek(32)
