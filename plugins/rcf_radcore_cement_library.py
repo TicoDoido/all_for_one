@@ -75,7 +75,7 @@ def recreate_rcf(original_file_path, txt_names_path):
         if file_version in [b'\x02\x01\x00\x01', b'\x02\x01\x01\x01']:
             endian_format = '<' if file_version == b'\x02\x01\x00\x01' else '>'
             endian_type = "LITTLE ENDIAN" if endian_format == '<' else "BIG ENDIAN"
-            log_message(f"Version is 2.1\n{endian_type} MODE")
+            logger(f"Version is 2.1\n{endian_type} MODE")
 
             original_file.seek(44)
             offset_value = struct.unpack(f'{endian_format}I', original_file.read(4))[0]
@@ -295,7 +295,7 @@ def extract_files(file_path):
 
         # Processo específico para a versão 01 02 00 01
         elif file_version == b'\x01\x02\x00\x01':
-            log_message("Version is 1.2\nLITTLE ENDIAN MODE.")
+            logger("Version is 1.2\nLITTLE ENDIAN MODE.")
             
             file.seek(2048)
             total_items = struct.unpack('<I', file.read(4))[0]
