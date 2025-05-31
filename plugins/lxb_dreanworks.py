@@ -14,7 +14,7 @@ def register_plugin(log_func, option_getter):
             
     return {
         "name": "LXB de texto de alguns jogos da DreamWorks(PS2, PS3, PC, Wii...)",
-        "description": "Extrai e recria textos de arquivos .LXB de texto de alguns jogos DreamWorks como Kung Foo Panda ou Shrek Forever After",
+        "description": "Extrai e recria textos de arquivos .LXB de texto de alguns jogos DreamWorks como Kung Fu Panda ou Shrek Forever After",
         "commands": [
             {"label": "Extrair Arquivo", "action": selecionar_arquivo_lxb_auto},
             {"label": "Recriar Arquivo", "action": selecionar_arquivo_txt_auto}

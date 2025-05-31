@@ -26,7 +26,7 @@ def register_plugin(log_func, option_getter):
             {
                 "name": "var_format",
                 "label": "Formato do DDS",
-                "values": ["DXT5", "DXT1"]
+                "values": ["DXT5", "DXT1", "BC7", "BGRA 8888"]
             },
         ],
         "commands": [
@@ -99,51 +99,84 @@ def round_up_multiple(value: int, multiple: int) -> int:
     return ((value + multiple - 1) // multiple) * multiple
 
 def process_file(input_path: str, output_path: str, mode: str, fmt: str):
-    block_data_size = 8 if fmt == "DXT1" else 16
+    # 1) Define block_data_size e header_size por formato
+    if fmt == "DXT1":
+        block_data_size = 8
+        header_size     = 128
+    elif fmt == "DXT5":
+        block_data_size = 16
+        header_size     = 128
+    elif fmt == "BC7":
+        block_data_size = 16
+        header_size     = 148        # DDS + DX10 header
+    elif fmt == "BGRA 8888":
+        block_data_size = 4 * 4 * 4  # 4×4 pixels × 4 bytes
+        header_size     = 148        # DDS + DX10 header
+    else:
+        raise ValueError(f"Formato não suportado: {fmt}")
 
+    # 2) Leitura de header + dados
     with open(input_path, "rb") as f:
-        header = f.read(128)  # Ler cabeçalho uma única vez
+        header = f.read(header_size)
         height = int.from_bytes(header[12:16], byteorder='little')
         width  = int.from_bytes(header[16:20], byteorder='little')
-        data = f.read()  # Restante dos dados após o cabeçalho
+        data   = f.read()
 
-    aligned_w = round_up_multiple(width, 32)
+    # 3) Alinhamento para múltiplos de 32 pixels
+    aligned_w = round_up_multiple(width,  32)
     aligned_h = round_up_multiple(height, 32)
-    block_w = aligned_w // 4
-    block_h = aligned_h // 4
 
-    orig_block_w = width  // 4
-    orig_block_h = height // 4
-
-    # Cria buffer com padding (zeros)
-    padded_data = bytearray(block_w * block_h * block_data_size)
-
-    # Copia dados originais linha por linha
-    for y in range(orig_block_h):
-        src_offset = y * orig_block_w * block_data_size
-        dst_offset = y * block_w * block_data_size
-        padded_data[dst_offset : dst_offset + (orig_block_w * block_data_size)] = \
-            data[src_offset : src_offset + (orig_block_w * block_data_size)]
-
-    if mode == 'Swizzle':
-        out = swizzle_ps4(padded_data, aligned_w, aligned_h,
-                          block_width=4, block_height=4,
-                          block_data_size=block_data_size)
+    # 4) Define blocos e tamanho unitário:
+    if fmt == "BGRA 8888":
+        # para BGRA, cada pixel é um "bloco" de 1×1, 4 bytes
+        block_w = block_h = 1
+        unit_sz = 4
     else:
-        unswizzled = unswizzle_ps4(data, aligned_w, aligned_h,
-                                   block_width=4, block_height=4,
-                                   block_data_size=block_data_size)
-        # Remove o padding após o unswizzle
-        out = bytearray(orig_block_w * orig_block_h * block_data_size)
-        for y in range(orig_block_h):
-            src_offset = y * block_w * block_data_size
-            dst_offset = y * orig_block_w * block_data_size
-            out[dst_offset : dst_offset + (orig_block_w * block_data_size)] = \
-                unswizzled[src_offset : src_offset + (orig_block_w * block_data_size)]
+        # para DXT/BC7, blocos de 4×4 pixels
+        block_w = block_h = 4
+        unit_sz = block_data_size
 
+    w_blocks = aligned_w  // block_w
+    h_blocks = aligned_h // block_h
+    orig_wb  = width  // block_w
+    orig_hb  = height // block_h
+
+    # 5) Cria buffer com padding e copia linha a linha
+    padded_data = bytearray(w_blocks * h_blocks * unit_sz)
+    for y in range(orig_hb):
+        src_off = y * orig_wb * unit_sz
+        dst_off = y * w_blocks * unit_sz
+        padded_data[dst_off:dst_off + orig_wb*unit_sz] = data[src_off:src_off + orig_wb*unit_sz]
+
+    # 6) Executa swizzle ou unswizzle sempre sobre padded_data
+    if mode == "Swizzle":
+        processed_full = swizzle_ps4(
+            padded_data,
+            aligned_w, aligned_h,
+            block_width=block_w,
+            block_height=block_h,
+            block_data_size=unit_sz
+        )
+    else:  # Unswizzle
+        processed_full = unswizzle_ps4(
+            padded_data,
+            aligned_w, aligned_h,
+            block_width=block_w,
+            block_height=block_h,
+            block_data_size=unit_sz
+        )
+
+    # 7) Se for unswizzle, ou mesmo swizzle no final, recorta de volta ao tamanho original
+    processed = bytearray(orig_wb * orig_hb * unit_sz)
+    for y in range(orig_hb):
+        src_off = y * w_blocks * unit_sz
+        dst_off = y * orig_wb   * unit_sz
+        processed[dst_off:dst_off + orig_wb*unit_sz] = processed_full[src_off:src_off + orig_wb*unit_sz]
+
+    # 8) Grava saída
     with open(output_path, "wb") as out_f:
-        out_f.write(header)  # Escrever cabeçalho original
-        out_f.write(out)
+        out_f.write(header)
+        out_f.write(processed)
 
 
 def choose_and_process():
