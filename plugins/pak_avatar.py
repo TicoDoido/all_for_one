@@ -73,7 +73,7 @@ def extrair_pak(arquivo_pak):
             nomes_arquivos = blocos_nomes.split(b'\x00')[:numero_itens]
 
             # Convertendo para strings e extraindo arquivos
-            nomes_arquivos = [nome.decode('utf-8') for nome in nomes_arquivos if nome]
+            nomes_arquivos = [nome.decode('utf-8').lstrip("//") for nome in nomes_arquivos if nome]
             
         elif magic == b'kcap\x01\x00\x02\x00':
             
@@ -109,7 +109,7 @@ def extrair_pak(arquivo_pak):
             nomes_arquivos = blocos_nomes.split(b'\x00')[:numero_itens]
 
             # Convertendo para strings e extraindo arquivos
-            nomes_arquivos = [nome.decode('utf-8') for nome in nomes_arquivos if nome]
+            nomes_arquivos = [nome.decode('utf-8').lstrip("//") for nome in nomes_arquivos if nome]
             
             
         else:
@@ -131,6 +131,7 @@ def extrair_pak(arquivo_pak):
                 
                 
                 # Criar diretórios para o arquivo no local correto
+                nome_arquivo_descomprimido = os.path.normpath(nome_arquivo_descomprimido)
                 caminho_completo = os.path.join(nome_pasta_saida, nome_arquivo_descomprimido)
                 caminho_completo = os.path.normpath(caminho_completo)  # Normalizar o caminho
                 os.makedirs(os.path.dirname(caminho_completo), exist_ok=True)
@@ -241,7 +242,6 @@ def recreate_file(arquivo_txt):
                 # Se o arquivo tiver '_descomprimido' no nome, comprimir os dados
                 if '_descomprimido' in nome_arquivo:
                     dados = zlib.compress(dados)
-                    logger(f"O arquivo '{nome_arquivo}' foi comprimido.")
 
                 # Salvar o tamanho comprimido
                 tamanho_comprimido = len(dados)
@@ -251,7 +251,6 @@ def recreate_file(arquivo_txt):
                 if tamanho_comprimido % 2048 != 0:
                     padding = 2048 - (tamanho_comprimido % 2048)
                     dados += b'\x00' * padding
-                    logger(f"Padding adicionado ao arquivo '{nome_arquivo}'. Tamanho final: 0x{len(dados):08X} bytes")
 
                 # Salvar o ponteiro de onde o arquivo será escrito
                 ponteiro_atual = pak.tell()
@@ -315,7 +314,6 @@ def recreate_file(arquivo_txt):
                 # Se o arquivo tiver '_descomprimido' no nome, comprimir os dados
                 if '_descomprimido' in nome_arquivo:
                     dados = zlib.compress(dados, level=9)
-                    logger(f"O arquivo '{nome_arquivo}' foi comprimido.")
 
                 # Salvar o tamanho comprimido
                 tamanho_comprimido = len(dados)
@@ -325,7 +323,6 @@ def recreate_file(arquivo_txt):
                 if tamanho_comprimido % 2048 != 0:
                     padding = 2048 - (tamanho_comprimido % 2048)
                     dados += b'\x00' * padding
-                    logger(f"Padding adicionado ao arquivo '{nome_arquivo}'. Tamanho final: 0x{len(dados):08X} bytes")
 
                 # Salvar o ponteiro de onde o arquivo será escrito
                 ponteiro_atual = pak.tell()
