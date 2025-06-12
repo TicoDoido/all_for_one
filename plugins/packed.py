@@ -1,114 +1,75 @@
 import struct
 import os
 import zlib
-from tkinter import filedialog, messagebox
-# no topo do seu plugin.py
+import threading
+import tkinter as tk
+from tkinter import filedialog, messagebox, ttk, Label, Button
+
 logger = print
-get_option = lambda name: None  # stub até receber do host
+get_option = lambda name: None
 
 def register_plugin(log_func, option_getter):
     global logger, get_option
-    # atribui o logger e a função de consulta de opções vindos do host
-    logger     = log_func or print
+    logger = log_func or print
     get_option = option_getter or (lambda name: None)
             
     return {
         "name": "PACKED arquivos do jogo Clive Barker's Jericho...",
-        "description": "Extrai e reinsere arquivos de containers .packed do jogo Clive Barker's Jericho.\nOs arquivos de texto desse jogo são apenas txt simples e a codificação é ANSI. \nO magic do arquivo é BFPK... versão 1.0 e talvez funcione em algum outro jogo.",
+        "description": "Extrai e reinsere arquivos de containers .packed com threads e progresso",
         "commands": [
             {"label": "Extrair Container", "action": start_extraction},
             {"label": "Reinserir Arquivos", "action": start_reinsertion},
         ]
     }
 
-def extract_packed_container(container_path):
-    # Obter o nome base do arquivo sem extensão e seu diretório
+class ProgressWindow:
+    def __init__(self, parent, title, total):
+        self.window = tk.Toplevel(parent)
+        self.window.title(title)
+        self.window.geometry("400x120")
+        self.window.resizable(False, False)
+        self.window.grab_set()
+        
+        self.progress_var = tk.DoubleVar()  # Corrigido: tk.DoubleVar em vez de ttk.DoubleVar
+        self.progress_bar = ttk.Progressbar(
+            self.window, 
+            variable=self.progress_var, 
+            maximum=total,
+            length=380
+        )
+        self.progress_bar.pack(pady=15, padx=10, fill="x")
+        
+        self.status_label = Label(self.window, text="0%")
+        self.status_label.pack(pady=5)
+        
+        self.cancel_button = Button(
+            self.window, 
+            text="Cancelar", 
+            command=self.cancel,
+            width=10
+        )
+        self.cancel_button.pack(pady=5)
+        
+        self.canceled = False
+        self.window.protocol("WM_DELETE_WINDOW", self.cancel)
+        
+    def cancel(self):
+        self.canceled = True
+        self.cancel_button.config(state="disabled")
+        
+    def update(self, value, text):
+        self.progress_var.set(value)
+        self.status_label.config(text=text)
+        
+    def destroy(self):
+        self.window.grab_release()
+        self.window.destroy()
+
+def extract_packed_container(container_path, progress_window=None):
     base_name = os.path.splitext(os.path.basename(container_path))[0]
     output_dir = os.path.join(os.path.dirname(container_path), base_name)
-    
-    # Criar a pasta de saída
     os.makedirs(output_dir, exist_ok=True)
 
-    with open(container_path, 'rb') as f:
-        # Verificar o Magic Number
-        magic = f.read(4)
-        if magic != b'BFPK':
-            raise ValueError("Arquivo não é um container .packed válido.")
-        
-        # Ler a versão
-        version = struct.unpack('<I', f.read(4))[0]
-        
-        # Ler o número total de arquivos
-        num_files = struct.unpack('<I', f.read(4))[0]
-        
-        # Percorrer o cabeçalho
-        for _ in range(num_files):
-            # Ler o tamanho do nome
-            name_size = struct.unpack('<I', f.read(4))[0]
-            
-            # Ler o nome do arquivo (e substituir '/' por separadores do sistema)
-            name = f.read(name_size).decode('utf-8').replace('/', os.sep)
-            
-            # Ler o tamanho descomprimido do arquivo (conforme cabeçalho)
-            decompressed_size = struct.unpack('<I', f.read(4))[0]
-            
-            # Ler a posição inicial do arquivo no container
-            file_offset = struct.unpack('<I', f.read(4))[0]
-            
-            # Salvar a posição atual no arquivo (para voltar ao cabeçalho depois)
-            current_pos = f.tell()
-            
-            logger(f"Extraindo: {name}")
-            
-            # Ir para a posição do arquivo no container
-            f.seek(file_offset)
-            
-            # Ler os primeiros 4 bytes que indicam o tamanho dos dados comprimidos
-            compressed_size = struct.unpack('<I', f.read(4))[0]
-            
-            # Ler os dados comprimidos
-            compressed_data = f.read(compressed_size)
-            
-            # Tentar descomprimir os dados lidos
-            try:
-                decompressed_data = zlib.decompress(compressed_data)
-            except zlib.error:
-                # Se ocorrer erro, manter os dados brutos (incluindo os 4 bytes iniciais do tamanho)
-                f.seek(file_offset)
-                decompressed_data = f.read(compressed_size + 4)
-            
-            # Criar o caminho de saída normalizado
-            output_path = os.path.join(output_dir, name)
-            output_path = os.path.normpath(output_path)
-
-            # Criar o diretório de saída, se não existir
-            os.makedirs(os.path.dirname(output_path), exist_ok=True)
-            
-            # Abrir o arquivo de saída para escrita
-            with open(output_path, 'wb') as out_file:
-                out_file.write(decompressed_data)
-            
-            # Voltar para a posição anterior no cabeçalho
-            f.seek(current_pos)
-
-    return output_dir
-
-
-def start_extraction():
-    container_path = filedialog.askopenfilename(
-        title="Selecione o arquivo .packed", 
-        filetypes=[("Packed Files", "*.packed"), ("Todos os Arquivos", "*.*")]
-    )
-    if not container_path:
-        return
-    
-    try:
-        output_dir = extract_packed_container(container_path)
-        messagebox.showinfo("Concluído", f"Extração concluída com sucesso!\nArquivos salvos em:\n{output_dir}")
-    except Exception as e:
-        messagebox.showerror("Erro", str(e))
-        
-def get_file_list(container_path):
     with open(container_path, 'rb') as f:
         if f.read(4) != b'BFPK':
             raise ValueError("Arquivo não é um container .packed válido.")
@@ -116,70 +77,160 @@ def get_file_list(container_path):
         version = struct.unpack('<I', f.read(4))[0]
         num_files = struct.unpack('<I', f.read(4))[0]
         
+        for i in range(num_files):
+            name_size = struct.unpack('<I', f.read(4))[0]
+            name = f.read(name_size).decode('utf-8').replace('/', os.sep)
+            decompressed_size = struct.unpack('<I', f.read(4))[0]
+            file_offset = struct.unpack('<I', f.read(4))[0]
+            
+            current_pos = f.tell()
+            f.seek(file_offset)
+            compressed_size = struct.unpack('<I', f.read(4))[0]
+            compressed_data = f.read(compressed_size)
+            f.seek(current_pos)
+            
+            output_path = os.path.join(output_dir, name)
+            os.makedirs(os.path.dirname(output_path), exist_ok=True)
+            
+            try:
+                decompressed_data = zlib.decompress(compressed_data)
+            except zlib.error:
+                f.seek(file_offset)
+                decompressed_data = f.read(compressed_size + 4)
+            
+            with open(output_path, 'wb') as out_file:
+                out_file.write(decompressed_data)
+                
+            if progress_window:
+                percent = int((i + 1) / num_files * 100)
+                progress_window.update(i + 1, f"{percent}% - {i+1}/{num_files} arquivos")
+                if progress_window.canceled:
+                    return None
+
+    return output_dir
+
+def start_extraction():
+    container_path = filedialog.askopenfilename(
+        title="Selecione o arquivo .packed", 
+        filetypes=[("Packed Files", "*.packed")]
+    )
+    if not container_path:
+        return
+    
+    try:
+        with open(container_path, 'rb') as f:
+            if f.read(4) != b'BFPK':
+                raise ValueError("Arquivo inválido")
+            f.seek(8)
+            num_files = struct.unpack('<I', f.read(4))[0]
+    except Exception as e:
+        messagebox.showerror("Erro", str(e))
+        return
+
+    progress_window = ProgressWindow(None, "Extraindo Container", num_files)
+    
+    def extraction_thread():
+        try:
+            output_dir = extract_packed_container(container_path, progress_window)
+            if output_dir is None:
+                messagebox.showinfo("Cancelado", "Extração cancelada pelo usuário")
+            else:
+                messagebox.showinfo("Concluído", f"Extração concluída!\n{output_dir}")
+        except Exception as e:
+            messagebox.showerror("Erro", str(e))
+        finally:
+            progress_window.destroy()
+    
+    threading.Thread(target=extraction_thread, daemon=True).start()
+
+def get_file_list(container_path):
+    with open(container_path, 'rb') as f:
+        if f.read(4) != b'BFPK':
+            raise ValueError("Arquivo inválido")
+        f.seek(8)
+        num_files = struct.unpack('<I', f.read(4))[0]
+        
         file_list = []
         for _ in range(num_files):
             name_size = struct.unpack('<I', f.read(4))[0]
             name = f.read(name_size).decode('utf-8').replace('/', os.sep)
-            f.seek(4, 1)
-            f.seek(4, 1)
+            f.seek(8, 1)
             file_list.append(name)
         
         header_end = f.tell()
     
     return file_list, header_end
 
-def reinsert_files(container_path, input_dir):
+def reinsert_files(container_path, input_dir, progress_window=None):
     file_list, header_end = get_file_list(container_path)
-    
+    total_files = len(file_list)
     temp_path = container_path + ".new"
     
     with open(container_path, 'rb') as f, open(temp_path, 'w+b') as out:
-        out.write(f.read(header_end))  # Copiar cabeçalho original
-        
+        out.write(f.read(header_end))
         novos_dados = []
         
-        for name in file_list:
-            pointer = out.tell()
+        for i, name in enumerate(file_list):
             input_file = os.path.join(input_dir, name)
-            input_file = os.path.normpath(input_file)
             if not os.path.exists(input_file):
                 raise FileNotFoundError(f"Arquivo não encontrado: {input_file}")
             
-            logger(f"Remontando arquivo: {input_file}")
             with open(input_file, 'rb') as fin:
                 original_data = fin.read()
-                this_file_size = len(original_data)
                 compressed_data = zlib.compress(original_data)
+                pointer = out.tell()
                 out.write(struct.pack('<I', len(compressed_data)))
                 out.write(compressed_data)
-                novos_dados.append((pointer, this_file_size))
+                novos_dados.append((pointer, len(original_data)))
                 
+            if progress_window:
+                percent = int((i + 1) / total_files * 100)
+                progress_window.update(i + 1, f"{percent}% - {i+1}/{total_files} arquivos")
+                if progress_window.canceled:
+                    os.remove(temp_path)
+                    return False
+                    
         out.seek(12)
-        
-        for pointer, this_file_size in novos_dados:
+        for (pointer, size) in novos_dados:
             name_size = struct.unpack('<I', out.read(4))[0]
-            out.read(name_size)
-            out.write(struct.pack('<I', this_file_size))
+            out.seek(name_size, 1)
+            out.write(struct.pack('<I', size))
             out.write(struct.pack('<I', pointer))
             
     os.replace(temp_path, container_path)
+    return True
 
 def start_reinsertion():
     container_path = filedialog.askopenfilename(
         title="Selecione o arquivo .packed",
-        filetypes=[("Packed Files", "*.packed"), ("Todos os Arquivos", "*.*")]
+        filetypes=[("Packed Files", "*.packed")]
     )
     if not container_path:
         return
 
-    # Obtém o diretório de entrada removendo a extensão do container_path
     input_dir = os.path.splitext(container_path)[0]
     if not os.path.exists(input_dir):
         messagebox.showerror("Erro", f"Diretório não encontrado: {input_dir}")
         return
 
     try:
-        reinsert_files(container_path, input_dir)
-        messagebox.showinfo("Concluído", "Reinserção concluída com sucesso!")
+        file_list, _ = get_file_list(container_path)
+        total_files = len(file_list)
+        progress_window = ProgressWindow(None, "Reinserindo Arquivos", total_files)
     except Exception as e:
         messagebox.showerror("Erro", str(e))
+        return
+
+    def reinsertion_thread():
+        try:
+            success = reinsert_files(container_path, input_dir, progress_window)
+            if progress_window.canceled:
+                messagebox.showinfo("Cancelado", "Reinserção cancelada pelo usuário")
+            elif success:
+                messagebox.showinfo("Concluído", "Reinserção concluída com sucesso!")
+        except Exception as e:
+            messagebox.showerror("Erro", str(e))
+        finally:
+            progress_window.destroy()
+    
+    threading.Thread(target=reinsertion_thread, daemon=True).start()
