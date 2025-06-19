@@ -24,7 +24,7 @@ def register_plugin(log_func, option_getter):
             {
                 "name": "var_format",
                 "label": "Formato do DDS",
-                "values": ["DXT5"]
+                "values": ["DXT1", "DXT3", "DXT5", "RGBA8888"]
             },
         ],
         "commands": [
@@ -119,15 +119,27 @@ def choose_and_process(_=None):
         width = int.from_bytes(header[16:20], byteorder="little")
         height = int.from_bytes(header[12:16], byteorder="little")
 
-        block_pixel_size = 4
-        texel_byte_pitch = 16
+        block_pixel_size = 4  # para DXT1/3/5
+        format_map = {
+            "DXT1": 8,
+            "DXT3": 16,
+            "DXT5": 16,
+            "RGBA8888": 64  # 4x4 pixels * 4 bytes = 64 bytes por bloco
+        }
+
+        texel_byte_pitch = format_map.get(fmt)
+        if texel_byte_pitch is None:
+            raise ValueError(f"Formato DDS não suportado: {fmt}")
+
+        if fmt == "RGBA8888":
+            block_pixel_size = 1  # não usa blocos de 4x4, cada "bloco" é 1 pixel
 
         if mode == "Swizzle":
             new_data = swizzle_x360(image_data, width, height, block_pixel_size, texel_byte_pitch)
-            out_path = file_path
         else:
             new_data = unswizzle_x360(image_data, width, height, block_pixel_size, texel_byte_pitch)
-            out_path = file_path
+
+        out_path = file_path
 
         with open(out_path, "wb") as f:
             f.write(header + new_data)
