@@ -19,7 +19,7 @@ def register_plugin(log_func, option_getter):
             {
                 "name": "tipo_arquivo",
                 "label": "Versão",
-                "values": ["1.0", "2.0/3.0"]
+                "values": ["1.0", "2.0", "3.0"]
             }
         ],
         "commands": [
@@ -32,7 +32,7 @@ def read_binary_file(file_path):
     
     tipo = get_option("tipo_arquivo")
     
-    if tipo == "1.0":
+    if tipo == "2.0":
         
             with open(file_path, 'rb') as f:
                 output_base_dir = os.path.splitext(file_path)[0]
@@ -90,7 +90,34 @@ def read_binary_file(file_path):
                     logger(f"Arquivo extraído: {full_path}")
             messagebox.showinfo("PRONTO !!!", f"Extração bem sucedida")
                 
+    elif tipo == "1.0":
+        
+        with open(file_path, 'rb') as f:
+            
+            out_file = os.path.splitext(file_path)[0] + ".txt"
+            f.seek(4)  # Posição inicial dos arquivos
+            logger(f"Extraindo textos para: {out_file}")
+            
+            
+            extracted_texts = []
+            while True:
                 
+                text_length_data = f.read(4)
+                if not text_length_data:
+                    break  # Fim do arquivo
+                
+                text_length = struct.unpack('>I', text_length_data)[0]
+                text_data = f.read(text_length)
+                decoded_text = text_data.strip(b'\x00').decode('ansi')
+                extracted_texts.append(decoded_text)
+            
+            with open(out_file, 'w', encoding='ansi') as txt_file:
+                
+                for text in extracted_texts:
+                    txt_file.write(f"{text}[FIM]\n")
+                    
+        messagebox.showinfo("PRONTO !!!", f"Extração bem sucedida")
+    
     else:           
         try:
             def read_name(file, char_count):
@@ -235,7 +262,7 @@ def read_binary_file(file_path):
 def rebuild_binary_file(original_file_path, output_file_path, extracted_folder):
 
     tipo = get_option("tipo_arquivo")
-    if tipo == "1.0":
+    if tipo == "2.0":
         try:
             # === 1) Abre original e lê só os nomes, na ordem ===
             file_names = []
@@ -329,6 +356,41 @@ def rebuild_binary_file(original_file_path, output_file_path, extracted_folder):
     
         except Exception as e:
             messagebox.showerror("ERRO", f"Falha ao reconstruir:\n{e}")
+    
+    elif tipo == "1.0":
+        try:
+            txt_file = extracted_folder + ".txt"
+
+            # Lê todos os textos separados por [FIM]\n
+            with open(txt_file, "r", encoding="ansi") as f:
+                textos = f.read().split("[FIM]\n")
+                if textos and textos[-1].strip() == "":
+                    textos.pop()
+
+            # Abre o arquivo original para escrita binária
+            with open(original_file_path, "r+b") as orig:
+                
+                orig.seek(4)
+                
+                for texto in textos:
+
+                    # Codifica o texto como ansi + byte nulo
+                    encoded = texto.encode("ansi") + b"\x00"
+
+                    # Calcula o tamanho em 4 bytes big-endian
+                    tamanho = len(encoded)
+                    tamanho_bytes = struct.pack(">I", tamanho)  # >I = big-endian, unsigned int (4 bytes)
+
+                    # Escreve no arquivo: primeiro o tamanho, depois o texto codificado
+                    orig.write(tamanho_bytes)
+                    orig.write(encoded)
+                    
+                orig.truncate()
+            
+            messagebox.showinfo("SUCESSO", f"Texto inserido em:\n{original_file_path}")
+
+        except Exception as e:
+            messagebox.showerror("Erro ao processar arquivo:", e)
 
 
     else:
