@@ -16,7 +16,7 @@ def register_plugin(log_func, option_getter):
     get_option = option_getter or (lambda name: None)
     
     return {
-        "name": ".dat Angry Birds Trilogy para arquyivos de texto",
+        "name": ".dat Angry Birds Trilogy para arquivos de texto",
         "description": "Extrai e reinsere strings .loc em arquivos .dat Angry Birds Trilogy",
         "commands": [
             {"label": "Extrair Strings", "action": extract_command},
