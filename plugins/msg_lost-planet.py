@@ -1,35 +1,142 @@
 import os
 import struct
+import threading
 from tkinter import filedialog, messagebox
+from pathlib import Path
 
-# no topo do seu plugin.py
+# ===================== TRANSLATIONS =====================
+plugin_translations = {
+    "pt_BR": {
+        "plugin_name": "MSG1 Lost Planet (PS3), Dead Rising (Xbox360)",
+        "plugin_description": "Converte arquivos .msg(MSG1) para texto e vice-versa",
+        "extract_text": "Converter MSG para TXT",
+        "rebuild_text": "Converter TXT para MSG",
+        "select_msg_file": "Selecione arquivo .MSG",
+        "select_txt_file": "Selecione arquivo .TXT",
+        "msg_files": "Arquivos MSG",
+        "txt_files": "Arquivos TXT",
+        "all_files": "Todos os arquivos",
+        "success": "Sucesso",
+        "extraction_success": "Arquivo convertido:\n{path}",
+        "recreation_success": "Arquivo recriado:\n{path}",
+        "error": "Erro",
+        "extraction_error": "Erro na conversão: {error}",
+        "recreation_error": "Erro na conversão reversa: {error}",
+        "invalid_magic": "Arquivo não é um .msg válido (Magic Number incorreto)",
+        "game_options": {
+            "Lost Planet EC(PS3)": "Lost Planet EC (PS3)",
+            "Dead Rising (Xbox360)": "Dead Rising (Xbox360)"
+        },
+        "processing_file": "Processando arquivo: {file}",
+        "unknown_sequence": "[{hex}]"
+    },
+    "en_US": {
+        "plugin_name": "MSG1 Lost Planet (PS3), Dead Rising (Xbox360)",
+        "plugin_description": "Converts .msg(MSG1) files to text and vice versa",
+        "extract_text": "Convert MSG to TXT",
+        "rebuild_text": "Convert TXT to MSG",
+        "select_msg_file": "Select .MSG file",
+        "select_txt_file": "Select .TXT file",
+        "msg_files": "MSG Files",
+        "txt_files": "TXT Files",
+        "all_files": "All Files",
+        "success": "Success",
+        "extraction_success": "File converted:\n{path}",
+        "recreation_success": "File rebuilt:\n{path}",
+        "error": "Error",
+        "extraction_error": "Conversion error: {error}",
+        "recreation_error": "Reverse conversion error: {error}",
+        "invalid_magic": "File is not a valid .msg (Incorrect Magic Number)",
+        "game_options": {
+            "Lost Planet EC(PS3)": "Lost Planet EC (PS3)",
+            "Dead Rising (Xbox360)": "Dead Rising (Xbox360)"
+        },
+        "processing_file": "Processing file: {file}",
+        "unknown_sequence": "[{hex}]"
+    },
+    "es_ES": {
+        "plugin_name": "MSG1 Lost Planet (PS3), Dead Rising (Xbox360)",
+        "plugin_description": "Convierte archivos .msg(MSG1) a texto y viceversa",
+        "extract_text": "Convertir MSG a TXT",
+        "rebuild_text": "Convertir TXT a MSG",
+        "select_msg_file": "Seleccionar archivo .MSG",
+        "select_txt_file": "Seleccionar archivo .TXT",
+        "msg_files": "Archivos MSG",
+        "txt_files": "Archivos TXT",
+        "all_files": "Todos los archivos",
+        "success": "Éxito",
+        "extraction_success": "Archivo convertido:\n{path}",
+        "recreation_success": "Archivo recreado:\n{path}",
+        "error": "Error",
+        "extraction_error": "Error de conversión: {error}",
+        "recreation_error": "Error de conversión inversa: {error}",
+        "invalid_magic": "Archivo no es un .msg válido (Magic Number incorrecto)",
+        "game_options": {
+            "Lost Planet EC(PS3)": "Lost Planet EC (PS3)",
+            "Dead Rising (Xbox360)": "Dead Rising (Xbox360)"
+        },
+        "processing_file": "Procesando archivo: {file}",
+        "unknown_sequence": "[{hex}]"
+    }
+}
+
+# ===================== GLOBAL VARIABLES =====================
 logger = print
-get_option = lambda name: None  # stub até receber do host
+current_language = "pt_BR"
+get_option = lambda name: None
 
-def register_plugin(log_func, option_getter):
-    global logger, get_option
-    # atribui o logger e a função de consulta de opções vindos do host
-    logger     = log_func or print
+# ===================== TRANSLATION FUNCTION =====================
+def translate(key, **kwargs):
+    """Plugin's internal translation function"""
+    lang_dict = plugin_translations.get(current_language, plugin_translations["pt_BR"])
+    translation = lang_dict.get(key, key)
+    
+    if kwargs:
+        try:
+            return translation.format(**kwargs)
+        except:
+            return translation
+    return translation
+
+# ===================== PLUGIN REGISTRATION =====================
+def register_plugin(log_func, option_getter, host_language="pt_BR"):
+    global logger, get_option, current_language
+    logger = log_func or print
     get_option = option_getter or (lambda name: None)
-            
+    current_language = host_language
+    
+    game_options = [
+        {
+            "value": "Lost Planet EC(PS3)",
+            "label": translate("game_options.Lost Planet EC(PS3)")
+        },
+        {
+            "value": "Dead Rising (Xbox360)",
+            "label": translate("game_options.Dead Rising (Xbox360)")
+        }
+    ]
+    
     return {
-        "name": "MSG1 Lost Planet (PS3), Dead Rising(Xbox360)",
-        "description": "Converte arquivos .msg(MSG1) para texto e vice-versa",
+        "name": translate("plugin_name"),
+        "description": translate("plugin_description"),
         "options": [
             {
                 "name": "tabela_jogo",
                 "label": "Escolha o jogo",
-                "values": ["Lost Planet EC(PS3)", "Dead Rising (Xbox360)"]
+                "type": "combobox",
+                "values": game_options,
+                "default": "Lost Planet EC(PS3)"
             }
         ],
         "commands": [
-            {"label": "Converter MSG para TXT", "action": convert_msg_to_txt},
-            {"label": "Converter TXT para MSG", "action": convert_txt_to_msg}
+            {"label": translate("extract_text"), "action": extract_msg_to_txt},
+            {"label": translate("rebuild_text"), "action": rebuild_txt_to_msg}
         ]
     }
 
+
 # Tabela para Dead Rising Xbox 360
-tabela_dead_rising_xbox360 = {
+DEAD_RISING_TABLE = {
     b'\x01\x00\x00\x00\x00\x04': b'[FIM]\n',
     b'\x03\x00\x00\x00\x00\x04': b'\n',
     b'\x20\x00\x1C\x00\x1E\x00': ' '.encode('utf-8'),  # espaço
@@ -147,10 +254,9 @@ tabela_dead_rising_xbox360 = {
     b'\xF6\x00\xFA\x00\x40\x00': 'ö'.encode('utf-8'),  # ö
     b'\xFA\x00\xFE\x00\x3F\x00': 'ú'.encode('utf-8'),  # ú
     b'\xF9\x00\xFC\x00\x3F\x00': 'ù'.encode('utf-8'),  # ù
-
 }
 # Tabela de conversão completa
-tabela_lost_planet_ps3 = {
+LOST_PLANET_TABLE = {
     b'\x00\x01\x00\x00\x00\x04': b'[FIM]\n',
     b'\x00\x03\x00\x00\x00\x04': b'\n',
     b'\x00\x20\x00\x0E\x40\x02': ' '.encode('utf-8'),  # espaço
@@ -273,148 +379,188 @@ tabela_lost_planet_ps3 = {
     b'\x00\xF6\x00\x84\x7E\x02': 'ö'.encode('utf-8'),  # ö
     b'\x00\xFA\x00\xA4\x7E\x02': 'ú'.encode('utf-8'),  # ú
 }
-
-def converter_binario_para_txt(input_file, output_file):
-    
-    
-    modo = get_option("tabela_jogo")
-    if modo == "Lost Planet EC(PS3)":
-        tabela = tabela_lost_planet_ps3
-        endiam = '>I'
-    else:
-        tabela = tabela_dead_rising_xbox360
-        endiam = '<I'
+# ===================== MAIN FUNCTIONS =====================
+def convert_msg_to_text(msg_path, txt_path):
+    """Convert MSG file to TXT using appropriate game table"""
     try:
-        # Primeiro verifica o magic number sem criar o arquivo de saída
-        with open(input_file, 'rb') as bin_file:
+        game = get_option("tabela_jogo") or "Lost Planet EC(PS3)"
+        table = LOST_PLANET_TABLE if game == "Lost Planet EC(PS3)" else DEAD_RISING_TABLE
+        endian = '>' if game == "Lost Planet EC(PS3)" else '<'
+        
+        logger(translate("processing_file", file=msg_path.name))
+        
+        with msg_path.open('rb') as bin_file:
+            # Verify magic number
             magic = bin_file.read(4)
             if magic != b'MSG1':
-                raise ValueError("Arquivo não é um .msg válido (Magic Number incorreto).")
-        
-        # Se o magic number estiver correto, prossegue com a conversão
-        with open(input_file, 'rb') as bin_file, open(output_file, 'w', encoding='utf-8') as txt_file:
+                raise ValueError(translate("invalid_magic"))
+            
+            # Read text start position
             bin_file.seek(4)
-            inicio_texto = struct.unpack(endiam, bin_file.read(4))[0]
-            bin_file.seek(inicio_texto)
+            text_start = struct.unpack(f'{endian}I', bin_file.read(4))[0]
+            bin_file.seek(text_start)
+            
+            # Process text blocks
+            with txt_path.open('w', encoding='utf-8') as txt_file:
+                while True:
+                    block = bin_file.read(6)
+                    if not block:
+                        break
+                        
+                    if block in table:
+                        char = table[block].decode('utf-8', errors='replace')
+                    else:
+                        hex_str = ''.join(f'{b:02X}' for b in block)
+                        char = translate("unknown_sequence", hex=hex_str)
+                    
+                    txt_file.write(char)
+        
+        return True
+        
+    except Exception as e:
+        raise Exception(translate("extraction_error", error=str(e)))
+
+def convert_text_to_msg(txt_path, msg_path):
+    """Convert TXT file back to MSG using appropriate game table"""
+    try:
+        game = get_option("tabela_jogo") or "Lost Planet EC(PS3)"
+        table = LOST_PLANET_TABLE if game == "Lost Planet EC(PS3)" else DEAD_RISING_TABLE
+        endian = '>' if game == "Lost Planet EC(PS3)" else '<'
+        
+        logger(translate("processing_file", file=txt_path.name))
+        
+        # Create reverse lookup table
+        reverse_table = {v.decode('utf-8', errors='replace'): k for k, v in table.items()}
+        
+        with txt_path.open('r', encoding='utf-8') as txt_file, \
+             msg_path.open('r+b') as bin_file:
+            
+            # Process text character by character
+            buffer = ''
+            bin_file.seek(64)  # Start writing after header
+            
             while True:
-                bloco = bin_file.read(6)
-                if not bloco:
+                char = txt_file.read(1)
+                if not char:
                     break
                     
-                if bloco in tabela:
-                    caractere = tabela[bloco].decode('utf-8', errors='replace')
-                else:
-                    caractere = f"[{''.join(f'{b:02X}' for b in bloco)}]"
-
-                txt_file.write(caractere)
-        return True
-    except Exception as e:
-        messagebox.showerror("Erro", f"Erro na conversão: {str(e)}")
-        return False
-
-def convert_msg_to_txt():
-    arquivo_msg = filedialog.askopenfilename(
-        title="Selecione o arquivo .msg",
-        filetypes=[("Arquivos MSG", "*.msg"), ("Todos os arquivos", "*.*")]
-    )
-    if not arquivo_msg:
-        return
-
-    arquivo_txt = os.path.splitext(arquivo_msg)[0] + '.txt'
-    if converter_binario_para_txt(arquivo_msg, arquivo_txt):
-        messagebox.showinfo("Sucesso", f"Arquivo convertido:\n{arquivo_txt}")
-
-def converter_txt_para_binario(input_file, output_file):
-    try:
-        modo = get_option("tabela_jogo")
-        if modo == "Lost Planet EC(PS3)":
-            tabela = tabela_lost_planet_ps3
-            endiam = '>I'
-        else:
-            tabela = tabela_dead_rising_xbox360
-            endiam = '<I'
-            
-        conversao_reversa = {v.decode('utf-8', errors='replace'): k for k, v in tabela.items()}
-
-        with open(input_file, 'r', encoding='utf-8') as txt_file, open(output_file, 'r+b') as bin_file:
-            buffer = ''
-            bin_file.seek(64)
-
-            while True:
-                caractere = txt_file.read(1)
-                if not caractere:
-                    break
-
-                buffer += caractere
-
+                buffer += char
+                
+                # Handle special sequences
                 if buffer.endswith('['):
                     next_chars = txt_file.read(3)
                     if not next_chars:
                         break
-
-                    buffer += next_chars
-
-                    if buffer.endswith('FIM'):
-                        next_two_chars = txt_file.read(2)
-                        buffer += next_two_chars
                         
-                        if next_two_chars == ']\n':
-                            if modo == "Lost Planet EC(PS3)":
-                                bloco = b'\x00\x01\x00\x00\x00\x04'
-                            else:
-                                bloco = b'\x01\x00\x00\x00\x00\x04'
+                    buffer += next_chars
+                    
+                    # Check for [FIM] marker
+                    if buffer.endswith('FIM'):
+                        end_marker = txt_file.read(2)
+                        buffer += end_marker
+                        
+                        if end_marker == ']\n':
+                            block = table.get(b'[FIM]\n'.encode('utf-8'))
                         else:
                             buffer = buffer[:-5]
                     else:
+                        # Handle hex sequences
                         buffer = buffer[:-5]
-                        hex_restante = txt_file.read(9)
-                        hex_seq = next_chars + hex_restante
-                        buffer += hex_restante
-
+                        hex_seq = next_chars + txt_file.read(9)
+                        buffer += hex_seq
+                        
                         try:
-                            bloco = bytes.fromhex(hex_seq)
-                            txt_file.read(1)
-                        except ValueError as e:
+                            block = bytes.fromhex(hex_seq)
+                            txt_file.read(1)  # Skip closing bracket
+                        except ValueError:
                             continue
                 
-                elif caractere in conversao_reversa:
-                    bloco = conversao_reversa[caractere]
+                elif char in reverse_table:
+                    block = reverse_table[char]
                 else:
                     continue
-                
-                bin_file.write(bloco)
+                    
+                bin_file.write(block)
             
-            bin_file.truncate()
-            tamanho_total = bin_file.tell()
+            # Update file size in header
+            file_size = bin_file.tell()
             bin_file.seek(8)
-            bin_file.write(struct.pack(endiam, tamanho_total))
-        
+            bin_file.write(struct.pack(f'{endian}I', file_size))
+            
         return True
+        
     except Exception as e:
-        messagebox.showerror("Erro", f"Erro na conversão reversa: {str(e)}")
-        return False
+        raise Exception(translate("recreation_error", error=str(e)))
 
-
-def convert_txt_to_msg():
-    arquivo_txt = filedialog.askopenfilename(
-        title="Selecione o arquivo .txt",
-        filetypes=[("Arquivos TXT", "*.txt"), ("Todos os arquivos", "*.*")]
+# ===================== COMMAND HANDLERS =====================
+def extract_msg_to_txt():
+    """Handle MSG to TXT conversion"""
+    msg_paths = filedialog.askopenfilenames(
+        title=translate("select_msg_file"),
+        filetypes=[
+            (translate("msg_files"), "*.msg"),
+            (translate("all_files"), "*.*")
+        ]
     )
-    if not arquivo_txt:
+    if not msg_paths:
         return
-
-    # Primeiro tenta com a extensão .msg
-    arquivo_bin_com_ext = os.path.splitext(arquivo_txt)[0] + '.msg'
     
-    # Se não existir, tenta sem extensão
-    if not os.path.exists(arquivo_bin_com_ext):
-        arquivo_bin_sem_ext = os.path.splitext(arquivo_txt)[0]
-        if os.path.exists(arquivo_bin_sem_ext):
-            arquivo_bin = arquivo_bin_sem_ext
-        else:
-            arquivo_bin = arquivo_bin_com_ext
-    else:
-        arquivo_bin = arquivo_bin_com_ext
+    def process_files():
+        for path in msg_paths:
+            try:
+                msg_path = Path(path)
+                txt_path = msg_path.with_suffix('.txt')
+                
+                if convert_msg_to_text(msg_path, txt_path):
+                    messagebox.showinfo(
+                        translate("success"),
+                        translate("extraction_success", path=txt_path)
+                    )
+            except Exception as e:
+                messagebox.showerror(
+                    translate("error"),
+                    f"{msg_path.name}: {str(e)}"
+                )
+    
+    threading.Thread(target=process_files, daemon=True).start()
 
-    if converter_txt_para_binario(arquivo_txt, arquivo_bin):
-        messagebox.showinfo("Sucesso", f"Arquivo recriado:\n{arquivo_bin}")
+def rebuild_txt_to_msg():
+    """Handle TXT to MSG conversion"""
+    txt_paths = filedialog.askopenfilenames(
+        title=translate("select_txt_file"),
+        filetypes=[
+            (translate("txt_files"), "*.txt"),
+            (translate("all_files"), "*.*")
+        ]
+    )
+    if not txt_paths:
+        return
+    
+    def process_files():
+        for path in txt_paths:
+            try:
+                txt_path = Path(path)
+                
+                # Try to find corresponding .msg file
+                msg_path_com_ext = txt_path.with_suffix('.msg')
+                msg_path_no_ext = txt_path.with_suffix('')
+                
+                if msg_path_com_ext.exists():
+                    msg_path = msg_path_com_ext
+                elif msg_path_no_ext.exists():
+                    msg_path = msg_path_no_ext
+                else:
+                    msg_path = msg_path_com_ext
+                
+                if convert_text_to_msg(txt_path, msg_path):
+                    messagebox.showinfo(
+                        translate("success"),
+                        translate("recreation_success", path=msg_path)
+                    )
+            except Exception as e:
+                messagebox.showerror(
+                    translate("error"),
+                    f"{txt_path.name}: {str(e)}"
+                )
+    
+    threading.Thread(target=process_files, daemon=True).start()

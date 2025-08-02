@@ -1,200 +1,216 @@
-# Morton code from REVERSE BOX https://github.com/bartlomiejduda/ReverseBox
-# round_up_multiple ideia from Piken (DwayneR) MANY THANKS TO BOTH !!!
-
-from tkinter import filedialog, messagebox
 import os
+import struct
+import threading
+from tkinter import filedialog, messagebox
 
-# no topo do seu plugin.py
-logger = print
-get_option = lambda name: None  # stub até receber do host
-
-def register_plugin(log_func, option_getter):
-    global logger, get_option
-    # atribui o logger e a função de consulta de opções vindos do host
-    logger     = log_func or print
-    get_option = option_getter or (lambda name: None)
-            
-    return {
-        "name": "SWIZZLER para PS4",
-        "description": "Aplica ou retira o Swizzle de PS4(MORTON).",
-        "options": [
-            {
-                "name": "var_mode",
-                "label": "Operação",
-                "values": ["Swizzle", "Unswizzle"]
-            },
-            {
-                "name": "var_format",
-                "label": "Formato do DDS",
-                "values": ["DXT5", "DXT1", "BC7", "BGRA 8888"]
-            },
-        ],
-        "commands": [
-            {"label": "Selecionar DDS", "action": choose_and_process},
-        ]
+# Dicionários de tradução do plugin
+plugin_translations = {
+    "pt_BR": {
+        "plugin_name": "SWIZZLER para PS4",
+        "plugin_description": "Aplica ou retira o Swizzle de PS4 (MORTON).",
+        "operation_label": "Operação",
+        "format_label": "Formato do DDS",
+        "swizzle": "Swizzle",
+        "unswizzle": "Unswizzle",
+        "select_file": "Selecionar DDS",
+        "dds_files": "Arquivos DDS",
+        "all_files": "Todos os arquivos",
+        "success_title": "Sucesso",
+        "success_message": "Arquivo salvo em:\n{path}",
+        "error_title": "Erro",
+        "error_message": "{error}",
+        "unsupported_format": "Formato não suportado: {fmt}"
+    },
+    "en_US": {
+        "plugin_name": "PS4 Swizzler",
+        "plugin_description": "Apply or remove PS4 Morton swizzle.",
+        "operation_label": "Operation",
+        "format_label": "DDS Format",
+        "swizzle": "Swizzle",
+        "unswizzle": "Unswizzle",
+        "select_file": "Select DDS file",
+        "dds_files": "DDS files",
+        "all_files": "All files",
+        "success_title": "Success",
+        "success_message": "File saved at:\n{path}",
+        "error_title": "Error",
+        "error_message": "{error}",
+        "unsupported_format": "Unsupported format: {fmt}"
+    },
+    "es_ES": {
+        "plugin_name": "SWIZZLER para PS4",
+        "plugin_description": "Aplica o quita el Swizzle de PS4 (MORTON).",
+        "operation_label": "Operación",
+        "format_label": "Formato DDS",
+        "swizzle": "Swizzle",
+        "unswizzle": "Unswizzle",
+        "select_file": "Seleccionar DDS",
+        "dds_files": "Archivos DDS",
+        "all_files": "Todos los archivos",
+        "success_title": "Éxito",
+        "success_message": "Archivo guardado en:\n{path}",
+        "error_title": "Error",
+        "error_message": "{error}",
+        "unsupported_format": "Formato no soportado: {fmt}"
     }
+}
+
+# Variáveis globais do plugin
+logger = print
+get_option = lambda name: None
+current_language = "pt_BR"
+
+def translate(key, **kwargs):
+    lang_dict = plugin_translations.get(current_language, plugin_translations["pt_BR"])
+    text = lang_dict.get(key, key)
+    if kwargs:
+        try:
+            return text.format(**kwargs)
+        except:
+            return text
+    return text
 
 
-def calculate_morton_index_ps4(t: int, input_img_width: int, input_img_height: int) -> int:
+def register_plugin(log_func, option_getter, host_language="pt_BR"):
+    global logger, get_option, current_language
+    logger = log_func or print
+    get_option = option_getter or (lambda name: None)
+    current_language = host_language
+
+    def get_plugin_info():
+        return {
+            "name": translate("plugin_name"),
+            "description": translate("plugin_description"),
+            "options": [
+                {"name": "var_mode",   "label": translate("operation_label"), "values": [translate("swizzle"), translate("unswizzle")]},
+                {"name": "var_format", "label": translate("format_label"),    "values": ["DXT1", "DXT5", "BC7", "BGRA 8888"]}
+            ],
+            "commands": [
+                {"label": translate("select_file"), "action": choose_and_process}
+            ]
+        }
+
+    return get_plugin_info
+
+
+def calculate_morton_index_ps4(t: int, w: int, h: int) -> int:
     num1 = num2 = 1
     num3 = num4 = 0
-    img_width = input_img_width
-    img_height = input_img_height
-    while img_width > 1 or img_height > 1:
-        if img_width > 1:
+    img_w, img_h = w, h
+    while img_w > 1 or img_h > 1:
+        if img_w > 1:
             num3 += num2 * (t & 1)
-            t   >>= 1
+            t >>= 1
             num2 <<= 1
-            img_width >>= 1
-        if img_height > 1:
+            img_w >>= 1
+        if img_h > 1:
             num4 += num1 * (t & 1)
-            t   >>= 1
+            t >>= 1
             num1 <<= 1
-            img_height >>= 1
-    return num4 * input_img_width + num3
+            img_h >>= 1
+    return num4 * w + num3
 
-def swizzle_ps4(image_data: bytes, img_width: int, img_height: int,
-                block_width: int = 4, block_height: int = 4, block_data_size: int = 16) -> bytes:
-    swizzled = bytearray(len(image_data))
-    src_idx = 0
-    w_blocks = img_width  // block_width
-    h_blocks = img_height // block_height
 
+def swizzle_ps4(data: bytes, width: int, height: int, block_width=4, block_height=4, block_size=16) -> bytes:
+    out = bytearray(len(data))
+    src = 0
+    w_blocks = width  // block_width
+    h_blocks = height // block_height
     for y in range((h_blocks + 7) // 8):
         for x in range((w_blocks + 7) // 8):
             for t in range(64):
                 morton = calculate_morton_index_ps4(t, 8, 8)
-                dy = morton // 8
-                dx = morton % 8
-                if (x*8 + dx) < w_blocks and (y*8 + dy) < h_blocks:
-                    dst = block_data_size * ((y*8 + dy) * w_blocks + (x*8 + dx))
-                    swizzled[src_idx:src_idx+block_data_size] = image_data[dst:dst+block_data_size]
-                    src_idx += block_data_size
-    return swizzled
+                dy, dx = divmod(morton, 8)
+                if (x*8+dx)<w_blocks and (y*8+dy)<h_blocks:
+                    dst = block_size * ((y*8+dy)*w_blocks + (x*8+dx))
+                    out[src:src+block_size] = data[dst:dst+block_size]
+                    src += block_size
+    return out
 
-def unswizzle_ps4(image_data: bytes, img_width: int, img_height: int,
-                  block_width: int = 4, block_height: int = 4, block_data_size: int = 16) -> bytes:
-    unswizzled = bytearray(len(image_data))
-    src_idx = 0
-    w_blocks = img_width  // block_width
-    h_blocks = img_height // block_height
 
+def unswizzle_ps4(data: bytes, width: int, height: int, block_width=4, block_height=4, block_size=16) -> bytes:
+    out = bytearray(len(data))
+    src = 0
+    w_blocks = width  // block_width
+    h_blocks = height // block_height
     for y in range((h_blocks + 7) // 8):
         for x in range((w_blocks + 7) // 8):
             for t in range(64):
                 morton = calculate_morton_index_ps4(t, 8, 8)
-                dy = morton // 8
-                dx = morton % 8
-                if (x*8 + dx) < w_blocks and (y*8 + dy) < h_blocks:
-                    dst = block_data_size * ((y*8 + dy) * w_blocks + (x*8 + dx))
-                    unswizzled[dst:dst+block_data_size] = image_data[src_idx:src_idx+block_data_size]
-                    src_idx += block_data_size
-    return unswizzled
+                dy, dx = divmod(morton, 8)
+                if (x*8+dx)<w_blocks and (y*8+dy)<h_blocks:
+                    dst = block_size * ((y*8+dy)*w_blocks + (x*8+dx))
+                    out[dst:dst+block_size] = data[src:src+block_size]
+                    src += block_size
+    return out
 
-def read_be_uint32(file, offset: int) -> int:
-    file.seek(offset)
-    return int.from_bytes(file.read(4), byteorder='little')
 
-def round_up_multiple(value: int, multiple: int) -> int:
-    return ((value + multiple - 1) // multiple) * multiple
+def round_up_multiple(val: int, mult: int) -> int:
+    return ((val + mult - 1) // mult) * mult
+
 
 def process_file(input_path: str, output_path: str, mode: str, fmt: str):
-    # 1) Define block_data_size e header_size por formato
+    # Define tamanhos por formato
     if fmt == "DXT1":
-        block_data_size = 8
-        header_size     = 128
+        block_size, header = 8, 128
     elif fmt == "DXT5":
-        block_data_size = 16
-        header_size     = 128
+        block_size, header = 16, 128
     elif fmt == "BC7":
-        block_data_size = 16
-        header_size     = 148        # DDS + DX10 header
+        block_size, header = 16, 148
     elif fmt == "BGRA 8888":
-        block_data_size = 4 * 4 * 4  # 4×4 pixels × 4 bytes
-        header_size     = 148        # DDS + DX10 header
+        block_size, header = 16, 148
     else:
-        raise ValueError(f"Formato não suportado: {fmt}")
+        raise ValueError(translate("unsupported_format", fmt=fmt))
 
-    # 2) Leitura de header + dados
     with open(input_path, "rb") as f:
-        header = f.read(header_size)
-        height = int.from_bytes(header[12:16], byteorder='little')
-        width  = int.from_bytes(header[16:20], byteorder='little')
+        hdr = f.read(header)
+        height = int.from_bytes(hdr[12:16], 'little')
+        width  = int.from_bytes(hdr[16:20], 'little')
         data   = f.read()
 
-    # 3) Alinhamento para múltiplos de 32 pixels
     aligned_w = round_up_multiple(width,  32)
     aligned_h = round_up_multiple(height, 32)
-
-    # 4) Define blocos e tamanho unitário:
-    if fmt == "BGRA 8888":
-        # para BGRA, cada pixel é um "bloco" de 1×1, 4 bytes
-        block_w = block_h = 1
-        unit_sz = 4
-    else:
-        # para DXT/BC7, blocos de 4×4 pixels
-        block_w = block_h = 4
-        unit_sz = block_data_size
-
+    unit_sz = block_size if fmt != "BGRA 8888" else 4
+    block_w = block_h = 4 if fmt != "BGRA 8888" else 1
     w_blocks = aligned_w  // block_w
     h_blocks = aligned_h // block_h
     orig_wb  = width  // block_w
     orig_hb  = height // block_h
 
-    # 5) Cria buffer com padding e copia linha a linha
-    padded_data = bytearray(w_blocks * h_blocks * unit_sz)
+    padded = bytearray(w_blocks * h_blocks * unit_sz)
     for y in range(orig_hb):
-        src_off = y * orig_wb * unit_sz
-        dst_off = y * w_blocks * unit_sz
-        padded_data[dst_off:dst_off + orig_wb*unit_sz] = data[src_off:src_off + orig_wb*unit_sz]
+        src_o = y * orig_wb * unit_sz
+        dst_o = y * w_blocks * unit_sz
+        padded[dst_o:dst_o+orig_wb*unit_sz] = data[src_o:src_o+orig_wb*unit_sz]
 
-    # 6) Executa swizzle ou unswizzle sempre sobre padded_data
-    if mode == "Swizzle":
-        processed_full = swizzle_ps4(
-            padded_data,
-            aligned_w, aligned_h,
-            block_width=block_w,
-            block_height=block_h,
-            block_data_size=unit_sz
-        )
-    else:  # Unswizzle
-        processed_full = unswizzle_ps4(
-            padded_data,
-            aligned_w, aligned_h,
-            block_width=block_w,
-            block_height=block_h,
-            block_data_size=unit_sz
-        )
+    if mode == translate("swizzle"):
+        full = swizzle_ps4(padded, aligned_w, aligned_h, block_size=unit_sz)
+    else:
+        full = unswizzle_ps4(padded, aligned_w, aligned_h, block_size=unit_sz)
 
-    # 7) Se for unswizzle, ou mesmo swizzle no final, recorta de volta ao tamanho original
-    processed = bytearray(orig_wb * orig_hb * unit_sz)
+    result = bytearray(orig_wb * orig_hb * unit_sz)
     for y in range(orig_hb):
-        src_off = y * w_blocks * unit_sz
-        dst_off = y * orig_wb   * unit_sz
-        processed[dst_off:dst_off + orig_wb*unit_sz] = processed_full[src_off:src_off + orig_wb*unit_sz]
+        src_o = y * w_blocks * unit_sz
+        dst_o = y * orig_wb * unit_sz
+        result[dst_o:dst_o+orig_wb*unit_sz] = full[src_o:src_o+orig_wb*unit_sz]
 
-    # 8) Grava saída
     with open(output_path, "wb") as out_f:
-        out_f.write(header)
-        out_f.write(processed)
+        out_f.write(hdr)
+        out_f.write(result)
 
 
 def choose_and_process():
-    mode   = get_option("var_mode")
-    fmt    = get_option("var_format")
-    input_file = filedialog.askopenfilename(
-        title="Select the DDS file",
-        filetypes=[("DDS files", "*.dds")]
+    mode = get_option("var_mode")
+    fmt  = get_option("var_format")
+    path = filedialog.askopenfilename(
+        title=translate("select_file"),
+        filetypes=[(translate("dds_files"), "*.dds"), (translate("all_files"), "*.*")]
     )
-    if not input_file:
+    if not path:
         return
 
-    dir_name  = os.path.dirname(input_file)
-    base, ext = os.path.splitext(os.path.basename(input_file))
-
     try:
-        process_file(input_file, input_file, mode, fmt)
-        messagebox.showinfo("Sucess", f"File saved:\n{input_file}")
+        threading.Thread(target=process_file, args=(path, path, mode, fmt), daemon=True).start()
+        messagebox.showinfo(translate("success_title"), translate("success_message", path=path))
     except Exception as e:
-        messagebox.showerror("Error", str(e))
-
+        messagebox.showerror(translate("error_title"), translate("error_message", error=str(e)))

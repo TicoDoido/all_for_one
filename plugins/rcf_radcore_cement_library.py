@@ -1,88 +1,217 @@
 import struct
 import os
-from tkinter import filedialog, messagebox, scrolledtext
 import threading
+from tkinter import filedialog, messagebox, scrolledtext
 
-
-
-# no topo do seu plugin.py
-logger = print
-get_option = lambda name: None  # stub até receber do host
-
-def register_plugin(log_func, option_getter):
-    global logger, get_option
-    # atribui o logger e a função de consulta de opções vindos do host
-    logger     = log_func or print
-    get_option = option_getter or (lambda name: None)
-
-    return {
-        "name": "RCF Radcore Cement Library VER:1.2/2.1",
-        "description": "Extrai e recria arquivos RCF de jogos da Radical Entertainment",
-        "commands": [
-            {"label": "Extrair Arquivo", "action": select_file},
-            {"label": "Recriar Arquivo", "action": start_rcf_recreation}
-        ]
+# Translation dictionaries for the plugin
+plugin_translations = {
+    "pt_BR": {
+        "plugin_name": "RCF - Radcore Cement Library VER:1.2/2.1",
+        "plugin_description": "Extrai e recria arquivos RCF de jogos da Radical Entertainment",
+        "extract_file": "Extrair Arquivo",
+        "rebuild_file": "Recriar Arquivo",
+        "select_rcf_file": "Selecione o arquivo .rcf",
+        "select_txt_file": "Selecione o arquivo .txt",
+        "rcf_files": "Arquivos RCF",
+        "text_files": "Arquivos de Texto",
+        "all_files": "Todos os arquivos",
+        "unsupported_file": "Arquivo não suportado!",
+        "extraction_completed": "Arquivos extraídos com sucesso para:\n{path}",
+        "recreation_completed": "Novo arquivo RCF criado em:\n{path}",
+        "folder_not_found": "Pasta não encontrada: {folder}",
+        "file_not_found": "Arquivo não encontrado: {file}",
+        "error_creating_dir": "Erro ao criar diretório: {error}",
+        "version_21_le": "Versão é 2.1\nMODO LITTLE ENDIAN",
+        "version_21_be": "Versão é 2.1\nMODO BIG ENDIAN",
+        "version_12_le": "Versão é 1.2\nMODO LITTLE ENDIAN",
+        "progress_title": "Processando Arquivo RCF",
+        "cancel_button": "Cancelar"
+    },
+    "en_US": {
+        "plugin_name": "RCF - Radcore Cement Library VER:1.2/2.1",
+        "plugin_description": "Extracts and recreates RCF files from Radical Entertainment games",
+        "extract_file": "Extract File",
+        "rebuild_file": "Rebuild File",
+        "select_rcf_file": "Select .rcf file",
+        "select_txt_file": "Select .txt file",
+        "rcf_files": "RCF Files",
+        "text_files": "Text Files",
+        "all_files": "All files",
+        "unsupported_file": "Unsupported file!",
+        "extraction_completed": "Files successfully extracted to:\n{path}",
+        "recreation_completed": "New RCF file created at:\n{path}",
+        "folder_not_found": "Folder not found: {folder}",
+        "file_not_found": "File not found: {file}",
+        "error_creating_dir": "Error creating directory: {error}",
+        "version_21_le": "Version is 2.1\nLITTLE ENDIAN MODE",
+        "version_21_be": "Version is 2.1\nBIG ENDIAN MODE",
+        "version_12_le": "Version is 1.2\nLITTLE ENDIAN MODE",
+        "progress_title": "Processing RCF File",
+        "cancel_button": "Cancel"
+    },
+    "es_ES": {
+        "plugin_name": "RCF - Radcore Cement Library VER:1.2/2.1",
+        "plugin_description": "Extrae y recrea archivos RCF de juegos de Radical Entertainment",
+        "extract_file": "Extraer Archivo",
+        "rebuild_file": "Recrear Archivo",
+        "select_rcf_file": "Seleccionar archivo .rcf",
+        "select_txt_file": "Seleccionar archivo .txt",
+        "rcf_files": "Archivos RCF",
+        "text_files": "Archivos de Texto",
+        "all_files": "Todos los archivos",
+        "unsupported_file": "¡Archivo no soportado!",
+        "extraction_completed": "Archivos extraídos exitosamente a:\n{path}",
+        "recreation_completed": "Nuevo archivo RCF creado en:\n{path}",
+        "folder_not_found": "Carpeta no encontrada: {folder}",
+        "file_not_found": "Archivo no encontrado: {file}",
+        "error_creating_dir": "Error al crear directorio: {error}",
+        "version_21_le": "Versión es 2.1\nMODO LITTLE ENDIAN",
+        "version_21_be": "Versión es 2.1\nMODO BIG ENDIAN",
+        "version_12_le": "Versión es 1.2\nMODO LITTLE ENDIAN",
+        "progress_title": "Procesando Archivo RCF",
+        "cancel_button": "Cancelar"
     }
+}
 
+# Plugin global variables
+logger = print
+current_language = "pt_BR"
+get_option = lambda name: None
 
+def translate(key, **kwargs):
+    """Internal plugin translation function"""
+    lang_dict = plugin_translations.get(current_language, plugin_translations["pt_BR"])
+    translation = lang_dict.get(key, key)
+    
+    if kwargs:
+        try:
+            return translation.format(**kwargs)
+        except:
+            return translation
+    return translation
 
-def select_file():
-    file_path = filedialog.askopenfilename(filetypes=[("RCF Files", "*.rcf"), ("All Files", "*.*")])
-    if file_path:
-        extract_files(file_path)
+def register_plugin(log_func, option_getter, host_language="pt_BR"):
+    global logger, current_language, get_option
+    logger = log_func or print
+    current_language = host_language
+    get_option = option_getter or (lambda name: None)
+    
+    def get_plugin_info():
+        return {
+            "name": translate("plugin_name"),
+            "description": translate("plugin_description"),
+            "commands": [
+                {"label": translate("extract_file"), "action": select_file},
+                {"label": translate("rebuild_file"), "action": start_rcf_recreation},
+            ]
+        }
+    
+    return get_plugin_info
+
+class ProgressWindow:
+    def __init__(self, parent, title, total):
+        self.window = tk.Toplevel(parent)
+        self.window.title(title)
+        self.window.geometry("400x120")
+        self.window.resizable(False, False)
+        self.window.grab_set()
         
+        self.progress_var = tk.DoubleVar()
+        self.progress_bar = ttk.Progressbar(
+            self.window, 
+            variable=self.progress_var, 
+            maximum=total,
+            length=380
+        )
+        self.progress_bar.pack(pady=15, padx=10, fill="x")
+        
+        self.status_label = Label(self.window, text="0%")
+        self.status_label.pack(pady=5)
+        
+        self.cancel_button = Button(
+            self.window, 
+            text=translate("cancel_button"), 
+            command=self.cancel,
+            width=10
+        )
+        self.cancel_button.pack(pady=5)
+        
+        self.canceled = False
+        self.window.protocol("WM_DELETE_WINDOW", self.cancel)
+        
+    def cancel(self):
+        self.canceled = True
+        self.cancel_button.config(state="disabled")
+        
+    def update(self, value, text):
+        self.progress_var.set(value)
+        self.status_label.config(text=text)
+        
+    def destroy(self):
+        self.window.grab_release()
+        self.window.destroy()
+
 def calculate_padding(size, allocation=512):
     if size % allocation == 0:
         return size
     return ((size // allocation) + 1) * allocation
 
+def select_file():
+    file_path = filedialog.askopenfilename(
+        title=translate("select_rcf_file"),
+        filetypes=[(translate("rcf_files"), "*.rcf"), (translate("all_files"), "*.*")]
+    )
+    if file_path:
+        threading.Thread(target=extract_files, args=(file_path,), daemon=True).start()
+
 def start_rcf_recreation():
-    #threading.Thread(target=recreate_rcf, args=(caminho_arquivo, caminho_txt), daemon=True).start()
-    rcf_path = filedialog.askopenfilename(filetypes=[("RCF Files", "*.rcf")])
+    rcf_path = filedialog.askopenfilename(
+        title=translate("select_rcf_file"),
+        filetypes=[(translate("rcf_files"), "*.rcf")]
+    )
     if not rcf_path:
         return
 
     base_filename = os.path.splitext(os.path.basename(rcf_path))[0]
-    txt_path = filedialog.askopenfilename(filetypes=[("Text Files", "*.txt")], initialfile=f"{base_filename}.txt")
+    txt_path = filedialog.askopenfilename(
+        title=translate("select_txt_file"),
+        filetypes=[(translate("text_files"), "*.txt")],
+        initialfile=f"{base_filename}.txt"
+    )
     if not txt_path:
         return
 
-    #recreate_rcf(rcf_path, txt_path)
     threading.Thread(target=recreate_rcf, args=(rcf_path, txt_path), daemon=True).start()
-
 
 def recreate_rcf(original_file_path, txt_names_path):
     base_filename = os.path.splitext(os.path.basename(original_file_path))[0]
-    base_filename = os.path.normpath(base_filename)
     base_directory = os.path.dirname(original_file_path)
-    base_directory = os.path.normpath(base_directory)
     new_rcf_path = os.path.join(base_directory, f"new_{base_filename}.rcf")
+    extracted_files_directory = os.path.join(base_directory, base_filename)
 
-    # Normalize extracted_files_directory to ensure it contains the correct path
-    extracted_files_directory = os.path.normpath(os.path.join(base_directory, base_filename))
-    extracted_files_directory = os.path.normpath(extracted_files_directory)
-
-    # Check if the directory exists
     if not os.path.exists(extracted_files_directory):
-        messagebox.showerror("Error", f"Folder {extracted_files_directory} not found!")
+        messagebox.showerror(
+            translate("error"),
+            translate("folder_not_found", folder=extracted_files_directory)
+        )
         return
 
-    # Check if txt_names_path exists
     if not os.path.exists(txt_names_path):
-        messagebox.showerror("Error", f"File {txt_names_path} not found!")
+        messagebox.showerror(
+            translate("error"),
+            translate("file_not_found", file=txt_names_path)
+        )
         return
 
-    logger("Starting RCF file recreation...")
+    logger(translate("progress_title"))
     
     with open(original_file_path, 'rb') as original_file:
         original_file.seek(32)
         file_version = original_file.read(4)
 
-        # Process versions 2.1 (Little and Big Endian)
         if file_version in [b'\x02\x01\x00\x01', b'\x02\x01\x01\x01']:
             endian_format = '<' if file_version == b'\x02\x01\x00\x01' else '>'
-            endian_type = "LITTLE ENDIAN" if endian_format == '<' else "BIG ENDIAN"
-            logger(f"Version is 2.1\n{endian_type} MODE")
+            logger(translate("version_21_le") if endian_format == '<' else translate("version_21_be"))
 
             original_file.seek(44)
             offset_value = struct.unpack(f'{endian_format}I', original_file.read(4))[0]
@@ -95,11 +224,9 @@ def recreate_rcf(original_file_path, txt_names_path):
             original_file.seek(0)
             header = original_file.read(adjusted_header_size)
 
-        # Process version 1.2
         elif file_version == b'\x01\x02\x00\x01':
-            logger("Version is 1.2\nLITTLE ENDIAN MODE.")
-            
-            endian_format = '<'  # Define the endian format for version 1.2
+            logger(translate("version_12_le"))
+            endian_format = '<'
             
             original_file.seek(2048)
             total_items = struct.unpack('<I', original_file.read(4))[0]
@@ -107,10 +234,10 @@ def recreate_rcf(original_file_path, txt_names_path):
             
             original_file.seek(names_offset + 4)
             
-            for i in range(total_items):
+            for _ in range(total_items):
                 original_file.seek(4, os.SEEK_CUR)
                 name_size = struct.unpack('<I', original_file.read(4))[0]
-                name_bytes = original_file.read(name_size)
+                original_file.read(name_size)
                 
             header_size = original_file.tell()
             adjusted_header_size = calculate_padding(header_size)
@@ -119,259 +246,181 @@ def recreate_rcf(original_file_path, txt_names_path):
             header = original_file.read(adjusted_header_size)
 
         else:
-            messagebox.showerror("Error", "Unsupported file!")
+            messagebox.showerror(translate("error"), translate("unsupported_file"))
             return
 
     with open(new_rcf_path, 'w+b') as new_rcf:
-        # Escrever o cabeçalho
         new_rcf.write(header)
-    
         pointers = []
         current_position = adjusted_header_size
     
-        # Abrir o arquivo de texto contendo os nomes
-        # Open the file containing the names
         with open(txt_names_path, 'r', encoding='utf-8') as txt_names:
             for line in txt_names:
-                file_name = line.lstrip("/\\").strip()  # Remove barras e espaços adicionais
+                file_name = line.lstrip("/\\").strip()
+                file_path = os.path.join(extracted_files_directory, file_name)
 
+                if not os.path.exists(file_path):
+                    logger(translate("file_not_found", file=file_path))
+                    continue
 
-                # Construct the full file path
-                file_path = os.path.normpath(os.path.join(extracted_files_directory, file_name))
-
-
-                # Check if the file exists
-                if os.path.exists(file_path):
-                    logger(f"File OK: {file_path}")
-                else:
-                    logger(f"File does not exist: {file_path}. Directory contents: {os.listdir(extracted_files_directory)}")
-
-
-                # Process the file
                 with open(file_path, 'rb') as f_file:
                     file_data = f_file.read()
-    
+
                 original_size = len(file_data)
                 size_with_padding = calculate_padding(original_size)
 
                 new_rcf.write(file_data)
                 new_rcf.write(b'\x00' * (size_with_padding - original_size))
     
-                # Armazenar o ponteiro e o tamanho original
                 pointers.append((current_position, original_size))
                 current_position += size_with_padding
 
-    
-        # Voltar e escrever os ponteiros e os tamanhos
         new_rcf.seek(32)
         file_version = new_rcf.read(4)
         
         if file_version in [b'\x02\x01\x00\x01', b'\x02\x01\x01\x01']:
             endian_format = '<' if file_version == b'\x02\x01\x00\x01' else '>'
-            
             new_rcf.seek(60)
             for pointer, original_size in pointers:
-                new_rcf.seek(4, os.SEEK_CUR)  # Skip 4 bytes
+                new_rcf.seek(4, os.SEEK_CUR)
                 new_rcf.write(struct.pack(f'{endian_format}I', pointer))
                 new_rcf.write(struct.pack(f'{endian_format}I', original_size))
-                
         else:
-            # Version 1.2 (LITTLE ENDIAN) -- EXISTS A BIG ENDIAN VERSION ?
             new_rcf.seek(2064)
             for pointer, original_size in pointers:
-                new_rcf.seek(4, os.SEEK_CUR)  # Skip 4 bytes
+                new_rcf.seek(4, os.SEEK_CUR)
                 new_rcf.write(struct.pack('<I', pointer))
                 new_rcf.write(struct.pack('<I', original_size))
     
-    logger(f"New RCF file successfully created at: {new_rcf_path}")
-    messagebox.showinfo("DONE", f"New RCF file created at: {new_rcf_path}")
+    messagebox.showinfo(
+        translate("completed"),
+        translate("recreation_completed", path=new_rcf_path)
+    )
 
 def extract_files(file_path):
-    # Resolva o caminho do diretório base
-    base_directory = os.path.realpath(os.path.dirname(file_path))
-    
-    # Nome base para o diretório de extração
+    base_directory = os.path.dirname(file_path)
     base_filename = os.path.splitext(os.path.basename(file_path))[0]
-    
-    # Diretório de extração
     extraction_directory = os.path.join(base_directory, base_filename)
 
-    # Criação do diretório de extração
     if not os.path.exists(extraction_directory):
         try:
             os.makedirs(extraction_directory)
-            logger(f"Extraction directory created: {extraction_directory}")
         except Exception as e:
-            logger(f"Error creating extraction directory: {e}")
+            messagebox.showerror(
+                translate("error"),
+                translate("error_creating_dir", error=str(e))
+            )
+            return
 
     with open(file_path, 'rb') as file:
         file.seek(32)
         file_version = file.read(4)
         
         if file_version in [b'\x02\x01\x00\x01', b'\x02\x01\x01\x01']:
-            if file_version == b'\x02\x01\x00\x01':
-                logger("Version is 2.1\nLITTLE ENDIAN MODE")
-            else:
-                logger("Version is 2.1\nBIG ENDIAN MODE")
+            endian_format = '<' if file_version == b'\x02\x01\x00\x01' else '>'
+            logger(translate("version_21_le") if endian_format == '<' else translate("version_21_be"))
 
-            file.seek(36)  # Move to the initial position of the pointers
-            if file_version == b'\x02\x01\x00\x01':
-                pointers_offset = struct.unpack('<I', file.read(4))[0]
-                file.seek(4, os.SEEK_CUR)
-                names_offset = struct.unpack('<I', file.read(4))[0]
-                file.seek(4, os.SEEK_CUR)
-            else:
-                pointers_offset = struct.unpack('>I', file.read(4))[0]
-                file.seek(4, os.SEEK_CUR)
-                names_offset = struct.unpack('>I', file.read(4))[0]
-                file.seek(4, os.SEEK_CUR)
+            file.seek(36)
+            pointers_offset = struct.unpack(f'{endian_format}I', file.read(4))[0]
+            file.seek(4, os.SEEK_CUR)
+            names_offset = struct.unpack(f'{endian_format}I', file.read(4))[0]
+            file.seek(4, os.SEEK_CUR)
 
             file.seek(56)
-            
-            if file_version == b'\x02\x01\x00\x01':
-                total_items = struct.unpack('<I', file.read(4))[0]
-            else:
-                total_items = struct.unpack('>I', file.read(4))[0]
+            total_items = struct.unpack(f'{endian_format}I', file.read(4))[0]
 
             pointers = []
-
             file.seek(pointers_offset)
-            for i in range(total_items):
-                file.seek(4, os.SEEK_CUR)  # Skip the first 4 bytes
-                if file_version == b'\x02\x01\x00\x01':
-                    file_offset = struct.unpack('<I', file.read(4))[0]
-                    file_size = struct.unpack('<I', file.read(4))[0]
-                else:
-                    file_offset = struct.unpack('>I', file.read(4))[0]
-                    file_size = struct.unpack('>I', file.read(4))[0]
+            for _ in range(total_items):
+                file.seek(4, os.SEEK_CUR)
+                file_offset = struct.unpack(f'{endian_format}I', file.read(4))[0]
+                file_size = struct.unpack(f'{endian_format}I', file.read(4))[0]
                 pointers.append((file_offset, file_size))
 
             names = []
             file.seek(names_offset + 8)
-
-            for i in range(total_items):
+            for _ in range(total_items):
                 file.seek(12, os.SEEK_CUR)
                 name_size = struct.unpack('<I', file.read(4))[0]
-
                 name_bytes = file.read(name_size)
-
                 try:
                     name = name_bytes.decode('utf-8').strip('\x00')
                     names.append(name)
-                except UnicodeDecodeError as e:
-                    logger(f"Error decoding name: {e} - Bytes read: {name_bytes}")
-
-                file.seek(3, os.SEEK_CUR)
+                except UnicodeDecodeError:
+                    names.append(f"unknown_{len(names)}")
 
             for i, (file_offset, file_size) in enumerate(pointers):
+                if i >= len(names):
+                    break
+                    
                 file.seek(file_offset)
                 data = file.read(file_size)
-                
-                # Certifique-se de que o nome do arquivo seja válido
-                if i >= len(names) or not names[i].strip():
-                    logger(f"Skipping unnamed file at index {i}.")
-                    continue
-                
-                # Corrigir o nome do arquivo para remover caminhos absolutos e normalizar
                 file_name = names[i].strip()
-                
-                # Caminho relativo completo preservado
                 complete_path = os.path.join(extraction_directory, file_name.lstrip("/\\"))
-
                 
-                # Criar todos os subdiretórios necessários
-                file_directory = os.path.dirname(complete_path)
-                if not os.path.exists(file_directory):
-                    os.makedirs(file_directory)
-
-                # Escrever o arquivo no caminho final
+                os.makedirs(os.path.dirname(complete_path), exist_ok=True)
                 with open(complete_path, 'wb') as f:
                     f.write(data)
                 
                 logger(f"File {complete_path} extracted successfully.")
 
-
             names_list_path = os.path.join(base_directory, f"{base_filename}.txt")
             with open(names_list_path, 'w', encoding='utf-8') as names_list:
                 for name in names:
                     names_list.write(name + '\n')
 
-            logger(f"File list saved at: {names_list_path}")
-
-        # Processo específico para a versão 01 02 00 01
         elif file_version == b'\x01\x02\x00\x01':
-            logger("Version is 1.2\nLITTLE ENDIAN MODE.")
+            logger(translate("version_12_le"))
             
             file.seek(2048)
             total_items = struct.unpack('<I', file.read(4))[0]
-            
             names_offset = struct.unpack('<I', file.read(4))[0]
-            
             file.seek(8, os.SEEK_CUR)
             
             pointers = []
-            
-            for i in range(total_items):
-                file.seek(4, os.SEEK_CUR)  # Skip the first 4 bytes
+            for _ in range(total_items):
+                file.seek(4, os.SEEK_CUR)
                 file_offset = struct.unpack('<I', file.read(4))[0]
                 file_size = struct.unpack('<I', file.read(4))[0]
                 pointers.append((file_offset, file_size))
                 
             names = []
-            
             file.seek(names_offset +4)
-            
-            for i in range(total_items):
+            for _ in range(total_items):
                 file.seek(4, os.SEEK_CUR)
-                
                 name_size = struct.unpack('<I', file.read(4))[0]
-
                 name_bytes = file.read(name_size)
-
                 try:
                     name = name_bytes.decode('utf-8').strip('\x00')
                     names.append(name)
-                except UnicodeDecodeError as e:
-                    logger(f"Error decoding name: {e} - Bytes read: {name_bytes}")
-            
-                for i, (file_offset, file_size) in enumerate(pointers):
-                    file.seek(file_offset)
-                    data = file.read(file_size)
-                
-                    # Certifique-se de que o nome do arquivo seja válido
-                    if i >= len(names) or not names[i].strip():
-                        logger(f"Skipping unnamed file at index {i}.")
-                        continue
-                
-                    # Corrigir o nome do arquivo para remover caminhos absolutos e normalizar
-                    file_name = names[i].strip()
-                
-                    # Caminho relativo completo preservado
-                    complete_path = os.path.join(extraction_directory, file_name.lstrip("/\\"))
+                except UnicodeDecodeError:
+                    names.append(f"unknown_{len(names)}")
 
+            for i, (file_offset, file_size) in enumerate(pointers):
+                if i >= len(names):
+                    break
+                    
+                file.seek(file_offset)
+                data = file.read(file_size)
+                file_name = names[i].strip()
+                complete_path = os.path.join(extraction_directory, file_name.lstrip("/\\"))
                 
-                    # Criar todos os subdiretórios necessários
-                    file_directory = os.path.dirname(complete_path)
-                    if not os.path.exists(file_directory):
-                        os.makedirs(file_directory)
-
-                    # Escrever o arquivo no caminho final
-                    with open(complete_path, 'wb') as f:
-                        f.write(data)
+                os.makedirs(os.path.dirname(complete_path), exist_ok=True)
+                with open(complete_path, 'wb') as f:
+                    f.write(data)
                 
-                    logger(f"File {complete_path} extracted successfully.")
-
+                logger(f"File {complete_path} extracted successfully.")
 
             names_list_path = os.path.join(base_directory, f"{base_filename}.txt")
-            names_list_path = names_list_path.replace('\\', '/')
             with open(names_list_path, 'w', encoding='utf-8') as names_list:
                 for name in names:
                     names_list.write(name + '\n')
 
-            logger(f"File list saved at: {names_list_path}")
-
         else:
-            messagebox.showerror("Error", "Unsupported file!")
-            return  
+            messagebox.showerror(translate("error"), translate("unsupported_file"))
+            return
 
-    messagebox.showinfo("DONE", f"Files successfully extracted to: {extraction_directory}")
+    messagebox.showinfo(
+        translate("completed"),
+        translate("extraction_completed", path=extraction_directory)
+    )
