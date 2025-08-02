@@ -1,77 +1,77 @@
-# All For One - Gerenciador de Plugins para Jogos  
+# All For One - Game Plugin Manager  
 
-Uma aplicação GUI em Python para gerenciar e executar plugins de jogos de forma modular.  
+A Python GUI application for managing and executing game plugins in a modular way.  
 
-## 📦 Funcionalidades Principais  
+## 📦 Core Features  
 
-- ✅ Carregamento dinâmico de plugins  
-- 🖥️ Interface gráfica intuitiva  
-- 🔄 Recarregamento de plugins sem reiniciar  
-- 📝 Sistema de log integrado  
-- 🛠️ Arquitetura modular fácil de expandir  
+- ✅ Dynamic plugin loading  
+- 🖥️ Intuitive graphical interface  
+- 🔄 Plugin reloading without restart  
+- 📝 Integrated logging system  
+- 🛠️ Easy-to-expand modular architecture  
 
-## ⚙️ Pré-requisitos  
+## ⚙️ Prerequisites  
 
-- Python 3.7 ou superior  
+- Python 3.7 or higher  
 
-## 🚀 Como Começar  
+## 🚀 Getting Started  
 
-1. Clone o repositório:  
-```bash
-git clone https://github.com/TicoDoido/all_for_one.git
-cd all-for-one
+1. Clone the repository:  
+```bash  
+git clone https://github.com/TicoDoido/all_for_one.git  
+cd all-for-one  
+```  
+
+2. Run the application:  
+```bash  
+ALL_FOR_ONE.py  
+```  
+
+## 🧩 Creating Plugins  
+
+1. Create a `.py` file in the `plugins/` folder  
+2. Use this basic template:  
+
+```python  
+def register_plugin():  
+    return {  
+        "name": "Plugin Name",  
+        "description": "Description of what your plugin does",  
+        "commands": [  
+            {  
+                "label": "Button Text",  
+                "action": lambda: print("Action executed!")  
+            }  
+            # Add more commands as needed  
+        ]  
+    }  
+```  
+
+3. Save the file and reload in the application  
+
+## 🖼️ Project Structure  
+
 ```
+all-for-one/  
+│  
+├── ALL_FOR_ONE.py     # Main code  
+├── README.md          # This file  
+└── plugins/           # Folder for your plugins  
+    ├── example1.py    # Example plugin  
+    └── example2.py    # Another plugin  
+```  
 
-2. Execute o aplicativo:  
-```bash
-ALL_FOR_ONE.py
-```
-
-## 🧩 Criando Plugins  
-
-1. Crie um arquivo `.py` na pasta `plugins/`  
-2. Use este template básico:  
-
-```python
-def register_plugin():
-    return {
-        "name": "Nome do Plugin",
-        "description": "Descrição do que seu plugin faz",
-        "commands": [
-            {
-                "label": "Texto do Botão",
-                "action": lambda: print("Ação executada!")
-            }
-            # Adicione mais comandos conforme necessário
-        ]
-    }
-```
-
-3. Salve o arquivo e recarregue no aplicativo  
-
-## 🖼️ Estrutura do Projeto  
-
-```
-all-for-one/
-│
-├── ALL_FOR_ONE.py     # Código principal
-├── README.md          # Este arquivo
-└── plugins/           # Pasta para seus plugins
-    ├── exemplo1.py    # Plugin de exemplo
-    └── exemplo2.py    # Outro plugin
-```
-
-## 📜 Log de Alterações  
+## 📜 Changelog  
 
 - **v1.0.0** (2023-11-20)  
-  - Versão inicial  
-  - Sistema básico de carregamento de plugins  
-  - Interface gráfica funcional  
+  - Initial version  
+  - Basic plugin loading system  
+  - Functional graphical interface  
 
-## 🤝 Como Contribuir  
+## 🤝 How to Contribute  
 
-1. Faça um fork do projeto  
-2. Crie sua branch (`git checkout -b feature/novafeature`)  
-3. Commit suas mudanças (`git commit -m 'Add new feature'`)  
-4. Push para a branch (`git push origin feature/novafeature`)  
-5. Abra um Pull Request  
+1. Fork the project  
+2. Create your branch (`git checkout -b feature/newfeature`)  
+3. Commit your changes (`git commit -m 'Add new feature'`)  
+4. Push to the branch (`git push origin feature/newfeature`)  
+5. Open a Pull Request
