@@ -1,6 +1,7 @@
 # All For One - Game Plugin Manager  
 
 A Python GUI application for managing and executing game plugins in a modular way.  
+It comes in 3 languages, Portuguese (BR), English and Spanish  
 
 ## 📦 Core Features  
 
@@ -75,3 +76,4 @@ all-for-one/
 3. Commit your changes (`git commit -m 'Add new feature'`)  
 4. Push to the branch (`git push origin feature/newfeature`)  
 5. Open a Pull Request
+
