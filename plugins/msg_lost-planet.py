@@ -8,6 +8,7 @@ from pathlib import Path
 plugin_translations = {
     "pt_BR": {
         "plugin_name": "MSG1 Lost Planet (PS3), Dead Rising (Xbox360)",
+        "select_game": "Escolha o Jogo",
         "plugin_description": "Converte arquivos .msg(MSG1) para texto e vice-versa",
         "extract_text": "Converter MSG para TXT",
         "rebuild_text": "Converter TXT para MSG",
@@ -23,15 +24,12 @@ plugin_translations = {
         "extraction_error": "Erro na conversão: {error}",
         "recreation_error": "Erro na conversão reversa: {error}",
         "invalid_magic": "Arquivo não é um .msg válido (Magic Number incorreto)",
-        "game_options": {
-            "Lost Planet EC(PS3)": "Lost Planet EC (PS3)",
-            "Dead Rising (Xbox360)": "Dead Rising (Xbox360)"
-        },
         "processing_file": "Processando arquivo: {file}",
         "unknown_sequence": "[{hex}]"
     },
     "en_US": {
         "plugin_name": "MSG1 Lost Planet (PS3), Dead Rising (Xbox360)",
+        "select_game": "Select the Game",
         "plugin_description": "Converts .msg(MSG1) files to text and vice versa",
         "extract_text": "Convert MSG to TXT",
         "rebuild_text": "Convert TXT to MSG",
@@ -47,15 +45,12 @@ plugin_translations = {
         "extraction_error": "Conversion error: {error}",
         "recreation_error": "Reverse conversion error: {error}",
         "invalid_magic": "File is not a valid .msg (Incorrect Magic Number)",
-        "game_options": {
-            "Lost Planet EC(PS3)": "Lost Planet EC (PS3)",
-            "Dead Rising (Xbox360)": "Dead Rising (Xbox360)"
-        },
         "processing_file": "Processing file: {file}",
         "unknown_sequence": "[{hex}]"
     },
     "es_ES": {
         "plugin_name": "MSG1 Lost Planet (PS3), Dead Rising (Xbox360)",
+        "select_game": "Elige el Juego",
         "plugin_description": "Convierte archivos .msg(MSG1) a texto y viceversa",
         "extract_text": "Convertir MSG a TXT",
         "rebuild_text": "Convertir TXT a MSG",
@@ -71,10 +66,6 @@ plugin_translations = {
         "extraction_error": "Error de conversión: {error}",
         "recreation_error": "Error de conversión inversa: {error}",
         "invalid_magic": "Archivo no es un .msg válido (Magic Number incorrecto)",
-        "game_options": {
-            "Lost Planet EC(PS3)": "Lost Planet EC (PS3)",
-            "Dead Rising (Xbox360)": "Dead Rising (Xbox360)"
-        },
         "processing_file": "Procesando archivo: {file}",
         "unknown_sequence": "[{hex}]"
     }
@@ -105,27 +96,14 @@ def register_plugin(log_func, option_getter, host_language="pt_BR"):
     get_option = option_getter or (lambda name: None)
     current_language = host_language
     
-    game_options = [
-        {
-            "value": "Lost Planet EC(PS3)",
-            "label": translate("game_options.Lost Planet EC(PS3)")
-        },
-        {
-            "value": "Dead Rising (Xbox360)",
-            "label": translate("game_options.Dead Rising (Xbox360)")
-        }
-    ]
-    
     return {
         "name": translate("plugin_name"),
         "description": translate("plugin_description"),
         "options": [
             {
                 "name": "tabela_jogo",
-                "label": "Escolha o jogo",
-                "type": "combobox",
-                "values": game_options,
-                "default": "Lost Planet EC(PS3)"
+                "label": translate("select_game"),
+                "values": ["Lost Planet EC(PS3)", "Dead Rising (Xbox360)"]
             }
         ],
         "commands": [

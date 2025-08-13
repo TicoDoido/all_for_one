@@ -28,11 +28,9 @@ plugin_translations = {
         "writing_file": "Gravando: {file}",
         "file_error": "Erro no arquivo '{file}': {error}",
         "compression_mode": "Modo de Compactação",
-        "compression_options": {
-            "zlib": "ZLIB (padrão)",
-            "deflate": "DEFLATE (raw)",
-            "N/A": "Sem compressão"
-        },
+        "zlib": "ZLIB (padrão)",
+        "deflate": "DEFLATE (raw)",
+        "N/A": "Sem compressão",
         "compression_attempt": "Tentando {method} em '{file}'",
         "compression_failed": "Falha ao comprimir '{file}': {error}",
         "rebuilding_at": "Reinserindo em offset: {offset}",
@@ -59,11 +57,9 @@ plugin_translations = {
         "writing_file": "Writing: {file}",
         "file_error": "File error '{file}': {error}",
         "compression_mode": "Compression Mode",
-        "compression_options": {
-            "zlib": "ZLIB (standard)",
-            "deflate": "DEFLATE (raw)",
-            "N/A": "No compression"
-        },
+        "zlib": "ZLIB (standard)",
+        "deflate": "DEFLATE (raw)",
+        "N/A": "No compression",
         "compression_attempt": "Trying {method} on '{file}'",
         "compression_failed": "Compression failed '{file}': {error}",
         "rebuilding_at": "Rebuilding at offset: {offset}",

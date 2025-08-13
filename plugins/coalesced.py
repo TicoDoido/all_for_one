@@ -52,15 +52,13 @@ plugin_translations = {
         "processing_file": "Processing file: {file}",
         "extracting_to": "Extracting to: {path}",
         "recreating_to": "Rebuilding to: {path}",
-        "version_warning": "Version {version} - ANSI (1.0/2.0) or UTF-8 (3.0)",
+        "version_warning": "Version - ANSI (1.0/2.0) or UTF-8 (3.0)",
         "empty_file": "Empty or invalid file",
         "invalid_structure": "Invalid file structure",
         "missing_extracted": "Extracted files not found",
-        "version_options": {
-            "1.0": "Version 1.0 (ANSI - Simple text)",
-            "2.0": "Version 2.0 (ANSI - INI structure)",
-            "3.0": "Version 3.0 (UTF-16 - Full structure)"
-        }
+        "1.0": "Version 1.0 (ANSI - Simple text)",
+        "2.0": "Version 2.0 (ANSI - INI structure)",
+        "3.0": "Version 3.0 (UTF-16 - Full structure)"
     },
     "es_ES": {
         "plugin_name": "COALESCED Archivo Unreal Engine 3 PS3/XBOX 360/N. Switch",

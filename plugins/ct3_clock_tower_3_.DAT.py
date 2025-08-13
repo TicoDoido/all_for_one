@@ -157,7 +157,7 @@ def extract_file():
                     output_file.write(file_data)
                 
                 extracted_files.append(name)
-                logger(f"Arquivo extraído: {output_file_path}")
+                logger(f"{output_file_path}")
             
             with open(filelist_path, 'w', encoding='utf-8') as filelist_file:
                 filelist_file.write("\n".join(extracted_files))
