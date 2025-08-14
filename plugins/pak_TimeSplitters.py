@@ -93,13 +93,13 @@ def extrair_pak(file_path):
             entries = []
             if magic == b"P5CK":
                 num_files = header_size // 16
-                for _ in range(num_files):
+                for idx in range(num_files):
                     file_id = f.read(4)
                     pos = struct.unpack("<I", f.read(4))[0]
                     size = struct.unpack("<I", f.read(4))[0]
                     f.read(4)  # 4 bytes nulos
                     file_id_hex = file_id.hex().upper()
-                    filename = f"{file_id_hex}.bin"
+                    filename = f"{idx:04d}_{file_id_hex}.bin"
                     entries.append((filename, pos, size))
 
             elif magic == b"P4CK":
@@ -151,12 +151,12 @@ def repack_pak(folder_path):
             entries = []
             if magic == b"P5CK":
                 num_files = header_size // 16
-                for _ in range(num_files):
+                for idx in range(num_files):
                     file_id = f.read(4)
                     pos = struct.unpack("<I", f.read(4))[0]
                     size = struct.unpack("<I", f.read(4))[0]
                     f.read(4)
-                    entries.append({"id": file_id, "name": f"{file_id.hex().upper()}.bin"})
+                    entries.append({"id": file_id, "name": f"{idx:04d}_{file_id.hex().upper()}.bin"})
             else:  # P4CK
                 num_files = header_size // 60
                 for _ in range(num_files):
