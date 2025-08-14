@@ -23,7 +23,7 @@ translations = {
         "plugin_not_found": "Plugin '{}' não encontrado.",
         "plugin_register_error": "O plugin '{}' não possui register_plugin.",
         "plugin_load_error": "Falha ao carregar plugin '{}': {}",
-        "language": "Idioma:",
+        "language": "LANGUAGE:",
         "pt_BR": "Português (BR)",
         "en_US": "Inglês",
         "es_ES": "Espanhol"
