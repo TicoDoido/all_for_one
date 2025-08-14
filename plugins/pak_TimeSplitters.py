@@ -6,13 +6,13 @@ from tkinter import filedialog, messagebox
 
 plugin_translations = {
     "pt_BR": {
-        "plugin_name": "PAK TimeSplitters Future Perfect (PS2)",
-        "plugin_description": "Ferramenta completa para extrair, modificar e recriar arquivos PAK do TimeSplitters Future Perfect no PlayStation 2, incluindo suporte para edição de textos em formato ANSI.",
+        "plugin_name": "PAK TimeSplitters 2/Future Perfect (PS2)",
+        "plugin_description": "Ferramenta completa para extrair, modificar e recriar arquivos PAK do (TimeSplitters Future Perfect/TimeSplitters 2) no PlayStation 2, incluindo suporte para edição de textos em formato ANSI.",
         "select_pak_file": "Selecionar arquivo PAK",
         "select_folder": "Selecionar pasta com arquivos extraídos",
         "extract_text": "Extrair texto de arquivo BIN",
         "insert_text": "Inserir texto no arquivo BIN",
-        "invalid_file_magic": "Arquivo inválido: Magic incorreto (esperado 'P5CK').",
+        "invalid_file_magic": "Arquivo inválido: Magic incorreto (esperado 'P4CK, P5CK').",
         "no_bin_files": "Nenhum arquivo .bin encontrado na pasta selecionada.",
         "invalid_filename": "Nome do arquivo inválido para extrair ID:\n{filename}",
         "repack_created": "Arquivo repack criado:\n{file}",
@@ -25,13 +25,13 @@ plugin_translations = {
         "success": "Sucesso"
     },
     "en_US": {
-        "plugin_name": "PAK TimeSplitters Future Perfect (PS2)",
-        "plugin_description": "Complete tool to extract, modify, and rebuild PAK files from TimeSplitters Future Perfect on PlayStation 2, including support for editing ANSI text files.",
+        "plugin_name": "PAK TimeSplitters 2/Future Perfect (PS2)",
+        "plugin_description": "Complete tool to extract, modify, and rebuild PAK files from (TimeSplitters Future Perfect/TimeSplitters 2) on PlayStation 2, including support for editing ANSI text files.",
         "select_pak_file": "Select PAK file",
         "select_folder": "Select folder with extracted files",
         "extract_text": "Extract text from BIN file",
         "insert_text": "Insert text into BIN file",
-        "invalid_file_magic": "Invalid file: Incorrect magic (expected 'P5CK').",
+        "invalid_file_magic": "Invalid file: Incorrect magic (expected 'P4CK, P5CK').",
         "no_bin_files": "No .bin files found in the selected folder.",
         "invalid_filename": "Invalid filename to extract ID:\n{filename}",
         "repack_created": "Repack file created:\n{file}",
@@ -44,13 +44,13 @@ plugin_translations = {
         "success": "Success"
     },
     "es_ES": {
-        "plugin_name": "PAK TimeSplitters Future Perfect (PS2)",
-        "plugin_description": "Herramienta completa para extraer, modificar y reconstruir archivos PAK de TimeSplitters Future Perfect en PlayStation 2, incluyendo soporte para editar textos en formato ANSI.",
+        "plugin_name": "PAK TimeSplitters 2/Future Perfect (PS2)",
+        "plugin_description": "Herramienta completa para extraer, modificar y reconstruir archivos PAK de (TimeSplitters Future Perfect/TimeSplitters 2) en PlayStation 2, incluyendo soporte para editar textos en formato ANSI.",
         "select_pak_file": "Seleccionar archivo PAK",
         "select_folder": "Seleccionar carpeta con archivos extraídos",
         "extract_text": "Extraer texto de archivo BIN",
         "insert_text": "Insertar texto en archivo BIN",
-        "invalid_file_magic": "Archivo inválido: Magic incorrecto (se esperaba 'P5CK').",
+        "invalid_file_magic": "Archivo inválido: Magic incorrecto (se esperaba 'P4CK, P5CK').",
         "no_bin_files": "No se encontraron archivos .bin en la carpeta seleccionada.",
         "invalid_filename": "Nombre de archivo inválido para extraer ID:\n{filename}",
         "repack_created": "Archivo reempaquetado creado:\n{file}",
@@ -81,92 +81,145 @@ def extrair_pak(file_path):
     try:
         with open(file_path, "rb") as f:
             magic = f.read(4)
-            if magic != b"P5CK":
+            if magic not in (b"P5CK", b"P4CK"):
                 messagebox.showerror(translate("error"), translate("invalid_file_magic"))
                 return
 
             header_offset = struct.unpack("<I", f.read(4))[0]
             header_size = struct.unpack("<I", f.read(4))[0]
-            num_files = header_size // 16
 
             f.seek(header_offset)
+
             entries = []
-            for _ in range(num_files):
-                file_id = f.read(4)
-                pos = struct.unpack("<I", f.read(4))[0]
-                size = struct.unpack("<I", f.read(4))[0]
-                f.read(4)  # 4 bytes nulos
-                entries.append((file_id, pos, size))
+            if magic == b"P5CK":
+                num_files = header_size // 16
+                for _ in range(num_files):
+                    file_id = f.read(4)
+                    pos = struct.unpack("<I", f.read(4))[0]
+                    size = struct.unpack("<I", f.read(4))[0]
+                    f.read(4)  # 4 bytes nulos
+                    file_id_hex = file_id.hex().upper()
+                    filename = f"{file_id_hex}.bin"
+                    entries.append((filename, pos, size))
+
+            elif magic == b"P4CK":
+                num_files = header_size // 60
+                for _ in range(num_files):
+                    name_bytes = f.read(48)
+                    filename = name_bytes.split(b"\x00", 1)[0].decode("utf-8", errors="ignore")
+                    pos = struct.unpack("<I", f.read(4))[0]
+                    size = struct.unpack("<I", f.read(4))[0]
+                    f.read(4)  # 4 bytes nulos
+                    entries.append((filename, pos, size))
 
             base_dir = os.path.dirname(file_path)
             base_name = os.path.splitext(os.path.basename(file_path))[0]
             output_dir = os.path.join(base_dir, base_name)
             os.makedirs(output_dir, exist_ok=True)
 
-            for idx, (file_id, pos, size) in enumerate(entries, start=1):
+            for filename, pos, size in entries:
                 f.seek(pos)
                 data = f.read(size)
-                file_id_hex = file_id.hex().upper()
-                filename = f"{idx:04d}_{file_id_hex}.bin"
-                with open(os.path.join(output_dir, filename), "wb") as out:
+                save_path = os.path.join(output_dir, filename)
+                os.makedirs(os.path.dirname(save_path), exist_ok=True)
+                with open(save_path, "wb") as out:
                     out.write(data)
 
-            messagebox.showinfo(translate("completed"), translate("extraction_completed", count=num_files, path=output_dir))
+            messagebox.showinfo(
+                translate("completed"),
+                translate("extraction_completed", count=len(entries), path=output_dir)
+            )
     except Exception as e:
         messagebox.showerror(translate("error"), str(e))
         logger(str(e))
 
+
 def repack_pak(folder_path):
+    original_pak_path = folder_path + ".PAK"
     try:
-        base_name = os.path.basename(folder_path.rstrip("/\\"))
-        base_dir = os.path.dirname(folder_path.rstrip("/\\"))
+        # Detectar magic e carregar cabeçalho original
+        with open(original_pak_path, "rb") as f:
+            magic = f.read(4)
+            if magic not in (b"P5CK", b"P4CK"):
+                messagebox.showerror(translate("error"), translate("invalid_file_magic"))
+                return
 
-        output_path = os.path.join(base_dir, f"{base_name}_MOD.PAK")
-
-        files = sorted(glob.glob(os.path.join(folder_path, "*.bin")))
-        if not files:
-            messagebox.showerror(translate("error"), translate("no_bin_files"))
-            return
-
-        with open(output_path, "wb") as out_f:
-            out_f.write(b"P5CK")
-            out_f.write(b"\x00" * 8)  # placeholder
-
-            out_f.seek(2048)
+            header_offset = struct.unpack("<I", f.read(4))[0]
+            header_size = struct.unpack("<I", f.read(4))[0]
+            f.seek(header_offset)
 
             entries = []
+            if magic == b"P5CK":
+                num_files = header_size // 16
+                for _ in range(num_files):
+                    file_id = f.read(4)
+                    pos = struct.unpack("<I", f.read(4))[0]
+                    size = struct.unpack("<I", f.read(4))[0]
+                    f.read(4)
+                    entries.append({"id": file_id, "name": f"{file_id.hex().upper()}.bin"})
+            else:  # P4CK
+                num_files = header_size // 60
+                for _ in range(num_files):
+                    name_bytes = f.read(48)
+                    filename = name_bytes.split(b"\x00", 1)[0].decode("utf-8", errors="ignore")
+                    pos = struct.unpack("<I", f.read(4))[0]
+                    size = struct.unpack("<I", f.read(4))[0]
+                    f.read(4)
+                    entries.append({"name": filename})
 
-            for file_path in files:
+        base_name = os.path.basename(folder_path.rstrip("/\\"))
+        base_dir = os.path.dirname(folder_path.rstrip("/\\"))
+        output_path = os.path.join(base_dir, f"{base_name}_MOD.PAK")
+
+        with open(output_path, "wb") as out_f:
+            out_f.write(magic)
+            out_f.write(b"\x00" * 8)  # placeholder
+            out_f.seek(2048)
+
+            new_entries = []
+            for entry in entries:
+                # Determinar caminho do arquivo editado
+                file_path = os.path.join(folder_path, entry["name"])
+                if not os.path.isfile(file_path):
+                    messagebox.showerror(translate("error"), translate("file_not_found", filename=entry["name"]))
+                    return
+
                 size = os.path.getsize(file_path)
                 pos = out_f.tell()
 
-                filename = os.path.basename(file_path)
-                try:
-                    id_hex = filename.split("_")[1].split(".")[0]
-                    id_bin = bytes.fromhex(id_hex)
-                except Exception:
-                    messagebox.showerror(translate("error"), translate("invalid_filename", filename=filename))
-                    return
-
                 with open(file_path, "rb") as f_in:
                     out_f.write(f_in.read())
-                    
-                    end = out_f.tell()
-                    if end % 2048  != 0:
-                        pad = 2048  - (end % 2048 )
-                        out_f.write(b"\x00" * pad)
 
-                entries.append((id_bin, pos, size))
+                # Padding alinhado a 2048
+                end = out_f.tell()
+                if end % 2048 != 0:
+                    pad = 2048 - (end % 2048)
+                    out_f.write(b"\x00" * pad)
+
+                if magic == b"P5CK":
+                    new_entries.append((entry["id"], pos, size))
+                else:  # P4CK
+                    new_entries.append((entry["name"], pos, size))
 
             header_pos = out_f.tell()
-            header_size = len(entries) * 16
+            if magic == b"P5CK":
+                header_size = len(new_entries) * 16
+                for file_id, pos, size in new_entries:
+                    out_f.write(file_id)
+                    out_f.write(struct.pack("<I", pos))
+                    out_f.write(struct.pack("<I", size))
+                    out_f.write(b"\x00\x00\x00\x00")
+            else:  # P4CK
+                header_size = len(new_entries) * 60
+                for filename, pos, size in new_entries:
+                    name_bytes = filename.encode("utf-8")
+                    name_bytes = name_bytes[:48] + b"\x00" * (48 - len(name_bytes))
+                    out_f.write(name_bytes)
+                    out_f.write(struct.pack("<I", pos))
+                    out_f.write(struct.pack("<I", size))
+                    out_f.write(b"\x00\x00\x00\x00")
 
-            for id_bin, pos, size in entries:
-                out_f.write(id_bin)
-                out_f.write(struct.pack("<I", pos))
-                out_f.write(struct.pack("<I", size))
-                out_f.write(b"\x00\x00\x00\x00")
-
+            # Atualizar header offset/size
             out_f.seek(4)
             out_f.write(struct.pack("<I", header_pos))
             out_f.write(struct.pack("<I", header_size))
@@ -175,6 +228,7 @@ def repack_pak(folder_path):
     except Exception as e:
         messagebox.showerror(translate("error"), str(e))
         logger(str(e))
+
 
 def extract_text(file_path):
     try:
@@ -250,7 +304,7 @@ def insert_text(txt_path):
         messagebox.showerror(translate("error"), str(e))
 
 def extract_text_ansi():
-    file_path = filedialog.askopenfilename(title="BIN files", filetypes=[("BIN files", "*.bin")])
+    file_path = filedialog.askopenfilename(title="BIN files", filetypes=[("BIN files", "*.*")])
     if file_path:
         extract_text(file_path)
 
