@@ -437,7 +437,7 @@ def save_texts_to_file(texts, file_path):
     output_file = f"{os.path.splitext(file_path)[0]}.txt"
     with open(output_file, 'w', encoding='utf8') as f:
         for text in texts:
-            f.write(f"{text}[fim]\n")
+            f.write(f"{text}[FIM]\n")
     messagebox.showinfo(translate("completed"), translate("text_extraction_completed", path=output_file))
 
 def insert_texts_into_binary(file_path):
@@ -447,7 +447,7 @@ def insert_texts_into_binary(file_path):
         return
 
     with open(txt_file_path, 'r', encoding='utf8') as f:
-        texts = f.read().split("[fim]\n")
+        texts = f.read().split("[FIM]\n")
         if texts[-1] == "":
             texts.pop()
 

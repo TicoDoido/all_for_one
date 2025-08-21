@@ -1,3 +1,4 @@
+# Script feito por Krisp
 import os
 import struct
 import zlib
