@@ -1,6 +1,7 @@
+# Swizzle code from REVERSE BOX https://github.com/bartlomiejduda/ReverseBox
+from tkinter import filedialog, messagebox
 import os
 import threading
-from tkinter import filedialog, messagebox
 
 # Dicionários de tradução do plugin
 plugin_translations = {
@@ -67,7 +68,6 @@ def translate(key, **kwargs):
     text = lang.get(key, key)
     return text.format(**kwargs) if kwargs else text
 
-
 def register_plugin(log_func, option_getter, host_language="pt_BR"):
     global logger, get_option, current_language
     logger = log_func or print
@@ -88,63 +88,92 @@ def register_plugin(log_func, option_getter, host_language="pt_BR"):
         }
     return get_plugin_info
 
+def swap_byte_order_x360(image_data: bytes) -> bytes:
+    if len(image_data) % 2 != 0:
+        pass
 
-def swap_byte_order_x360(data: bytes) -> bytes:
-    paired = bytearray(data)
-    for i in range(0, len(paired) & ~1, 2):
-        paired[i], paired[i+1] = paired[i+1], paired[i]
-    return bytes(paired)
+    swapped = bytearray(image_data)
+    for i in range(0, len(swapped) & ~1, 2):
+        swapped[i], swapped[i+1] = swapped[i+1], swapped[i]
+    return bytes(swapped)
 
+def _xg_address_2d_tiled_x(block_offset: int, width_in_blocks: int, texel_byte_pitch: int) -> int:
+    aligned_width: int = (width_in_blocks + 31) & ~31
+    log_bpp: int = (texel_byte_pitch >> 2) + ((texel_byte_pitch >> 1) >> (texel_byte_pitch >> 2))
+    offset_byte: int = block_offset << log_bpp
+    offset_tile: int = (((offset_byte & ~0xFFF) >> 3) + ((offset_byte & 0x700) >> 2) + (offset_byte & 0x3F))
+    offset_macro: int = offset_tile >> (7 + log_bpp)
 
-def _xg_address_2d_tiled_x(off, w_blocks, pitch):
-    aligned = (w_blocks + 31) & ~31
-    log_bpp = (pitch >> 2) + ((pitch >> 1) >> (pitch >> 2))
-    ob = off << log_bpp
-    ot = (((ob & ~0xFFF) >> 3) + ((ob & 0x700) >> 2) + (ob & 0x3F))
-    om = ot >> (7 + log_bpp)
-    mx = (om % (aligned >> 5)) << 2
-    tile = (((ot >> (5 + log_bpp)) & 2) + (ob >> 6)) & 3
-    return ((mx + tile) << 3) + ((((ot >> 1) & ~0xF) + (ot & 0xF)) & ((pitch << 3) - 1)) >> log_bpp
+    macro_x: int = (offset_macro % (aligned_width >> 5)) << 2
+    tile: int = (((offset_tile >> (5 + log_bpp)) & 2) + (offset_byte >> 6)) & 3
+    macro: int = (macro_x + tile) << 3
+    micro: int = ((((offset_tile >> 1) & ~0xF) + (offset_tile & 0xF)) & ((texel_byte_pitch << 3) - 1)) >> log_bpp
 
-
-def _xg_address_2d_tiled_y(off, w_blocks, pitch):
-    aligned = (w_blocks + 31) & ~31
-    log_bpp = (pitch >> 2) + ((pitch >> 1) >> (pitch >> 2))
-    ob = off << log_bpp
-    ot = (((ob & ~0xFFF) >> 3) + ((ob & 0x700) >> 2) + (ob & 0x3F))
-    om = ot >> (7 + log_bpp)
-    my = (om // (aligned >> 5)) << 2
-    tile = ((ot >> (6 + log_bpp)) & 1) + ((ob & 0x800) >> 10)
-    return (my + tile) << 3 | (((ot & ((pitch << 6) - 1 & ~0x1F)) + ((ot & 0xF) << 1)) >> (3 + log_bpp)) & ~1 | ((ot & 0x10) >> 4)
+    return macro + micro
 
 
-def _convert_x360(data, w, h, bps, pitch, swizz):
-    wb = w // bps; hb = h // bps
-    pb = (wb + 31) & ~31; ph = (hb + 31) & ~31
-    total = pb * ph
-    out = bytearray((total if swizz else wb*hb) * pitch)
-    for off in range(total):
-        x = _xg_address_2d_tiled_x(off, pb, pitch)
-        y = _xg_address_2d_tiled_y(off, pb, pitch)
-        if x < wb and y < hb:
-            if not swizz:
-                out[(y*wb+x)*pitch:(y*wb+x+1)*pitch] = data[off*pitch:(off+1)*pitch]
+def _xg_address_2d_tiled_y(block_offset: int, width_in_blocks: int, texel_byte_pitch: int) -> int:
+    aligned_width: int = (width_in_blocks + 31) & ~31
+    log_bpp: int = (texel_byte_pitch >> 2) + ((texel_byte_pitch >> 1) >> (texel_byte_pitch >> 2))
+    offset_byte: int = block_offset << log_bpp
+    offset_tile: int = (((offset_byte & ~0xFFF) >> 3) + ((offset_byte & 0x700) >> 2) + (offset_byte & 0x3F))
+    offset_macro: int = offset_tile >> (7 + log_bpp)
+
+    macro_y: int = (offset_macro // (aligned_width >> 5)) << 2
+    tile: int = ((offset_tile >> (6 + log_bpp)) & 1) + ((offset_byte & 0x800) >> 10)
+    macro: int = (macro_y + tile) << 3
+    micro: int = (((offset_tile & ((texel_byte_pitch << 6) - 1 & ~0x1F)) + ((offset_tile & 0xF) << 1)) >> (3 + log_bpp)) & ~1
+
+    return macro + micro + ((offset_tile & 0x10) >> 4)
+
+
+def _convert_x360_image_data(image_data: bytes, image_width: int, image_height: int, block_pixel_size: int, texel_byte_pitch: int, swizzle_flag: bool) -> bytes:
+    width_in_blocks: int = image_width // block_pixel_size
+    height_in_blocks: int = image_height // block_pixel_size
+
+    padded_width_in_blocks: int = (width_in_blocks + 31) & ~31
+    padded_height_in_blocks: int = (height_in_blocks + 31) & ~31
+    total_padded_blocks = padded_width_in_blocks * padded_height_in_blocks
+
+    if not swizzle_flag:
+        converted_data: bytearray = bytearray(width_in_blocks * height_in_blocks * texel_byte_pitch)
+    else:
+        converted_data: bytearray = bytearray(total_padded_blocks * texel_byte_pitch)
+
+    for block_offset in range(total_padded_blocks):
+        x = _xg_address_2d_tiled_x(block_offset, padded_width_in_blocks, texel_byte_pitch)
+        y = _xg_address_2d_tiled_y(block_offset, padded_width_in_blocks, texel_byte_pitch)
+
+        if x < width_in_blocks and y < height_in_blocks:
+            if not swizzle_flag:
+                src_byte_offset = block_offset * texel_byte_pitch
+                dest_byte_offset = (y * width_in_blocks + x) * texel_byte_pitch
+                if src_byte_offset + texel_byte_pitch <= len(image_data):
+                    converted_data[dest_byte_offset: dest_byte_offset + texel_byte_pitch] = image_data[src_byte_offset: src_byte_offset + texel_byte_pitch]
             else:
-                out[off*pitch:(off+1)*pitch] = data[(y*wb+x)*pitch:(y*wb+x+1)*pitch]
-    return bytes(out)
+                src_byte_offset = (y * width_in_blocks + x) * texel_byte_pitch
+                dest_byte_offset = block_offset * texel_byte_pitch
+                if src_byte_offset + texel_byte_pitch <= len(image_data):
+                    converted_data[dest_byte_offset: dest_byte_offset + texel_byte_pitch] = image_data[src_byte_offset: src_byte_offset + texel_byte_pitch]
+
+    return bytes(converted_data)
 
 
-def swizzle_x360(data: bytes, w: int, h: int, bps=4, pitch=8) -> bytes:
-    return _convert_x360(swap_byte_order_x360(data), w, h, bps, pitch, True)
+def unswizzle_x360(image_data: bytes, img_width: int, img_height: int, block_pixel_size: int = 4, texel_byte_pitch: int = 8) -> bytes:
+    swapped_data: bytes = swap_byte_order_x360(image_data)
+    unswizzled_data: bytes = _convert_x360_image_data(swapped_data, img_width, img_height, block_pixel_size, texel_byte_pitch, False)
+    return unswizzled_data
 
 
-def unswizzle_x360(data: bytes, w: int, h: int, bps=4, pitch=8) -> bytes:
-    return _convert_x360(swap_byte_order_x360(data), w, h, bps, pitch, False)
-
+def swizzle_x360(image_data: bytes, img_width: int, img_height: int, block_pixel_size: int = 4, texel_byte_pitch: int = 8) -> bytes:
+    swapped_data: bytes = swap_byte_order_x360(image_data)
+    swizzled_data: bytes = _convert_x360_image_data(swapped_data, img_width, img_height, block_pixel_size, texel_byte_pitch, True)
+    return swizzled_data
 
 def choose_and_process():
     mode = get_option("var_mode")
     fmt = get_option("var_format")
+    
     path = filedialog.askopenfilename(
         title=translate("select_file"),
         filetypes=[(translate("dds_files"), "*.dds"), (translate("all_files"), "*.*")]
@@ -159,14 +188,32 @@ def choose_and_process():
                 w = int.from_bytes(hdr[16:20], 'little')
                 h = int.from_bytes(hdr[12:16], 'little')
                 data = f.read()
+                
             logger(translate("processing", name=os.path.basename(path), width=w, height=h))
-            pitch_map = {"DXT1":8, "DXT3":16, "DXT5":16, "RGBA8888":64}
-            pitch = pitch_map.get(fmt) or (_ for _ in ()).throw(ValueError(translate("unsupported_format", fmt=fmt)))
-            new = swizzle_x360(data, w, h, 4, pitch) if mode==translate("swizzle") else unswizzle_x360(data, w, h, 4, pitch)
+            
+            format_map = {
+                "DXT1": 8,
+                "DXT3": 16,
+                "DXT5": 16,
+                "RGBA8888": 64
+            }
+            
+            pitch = format_map.get(fmt)
+            if pitch is None:
+                raise ValueError(translate("unsupported_format", fmt=fmt))
+            
+            if mode == translate("swizzle"):
+                new_data = swizzle_x360(data, w, h, 4, pitch)
+            else:
+                new_data = unswizzle_x360(data, w, h, 4, pitch)
+                
             with open(path, "wb") as f:
-                f.write(hdr + new)
+                f.write(hdr + new_data)
+                
             messagebox.showinfo(translate("success_title"), translate("success_message", path=path))
+            
         except Exception as e:
             logger(e)
             messagebox.showerror(translate("error_title"), translate("error_message", error=str(e)))
+            
     threading.Thread(target=task, daemon=True).start()
