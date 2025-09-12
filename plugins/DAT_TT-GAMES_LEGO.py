@@ -1,3 +1,4 @@
+# Lógica retirada do Quick BMS feito pelo Aluigi
 import os
 import struct
 import json
