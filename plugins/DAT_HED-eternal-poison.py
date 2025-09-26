@@ -302,6 +302,8 @@ def repack_ep(hed_path):
                 logger(translate("log_repacked", name=e["NAME"], offset=current_offset, size=len(data)))
 
                 current_offset = dat_out.tell()
+                
+            dat_out.truncate()
 
         messagebox.showinfo(translate("msg_title_done"),
                             translate("msg_done_repack", dat=new_dat_path, hed=hed_path))
@@ -354,13 +356,13 @@ def extract_db(db_path):
                 text_bytes = f.read(size)
                 if not text_bytes:
                     break
-                text = text_bytes.rstrip(b"\x00").decode("utf-8", errors="ignore").replace("\n", "[BR]")
+                text = text_bytes.rstrip(b"\x00").decode("ansi", errors="ignore").replace("\n", "[BR]")
                 id_hex = id_bytes.hex().upper()
                 texts.append(f"{id_hex}:{text}")
                 logger(translate("log_read_db_entry", i=i, id_hex=id_hex, text=text))
                 i += 1
 
-        with open(out_txt, "w", encoding="utf-8") as out_file:
+        with open(out_txt, "w", encoding="ansi") as out_file:
             out_file.write("\n".join(texts))
 
         messagebox.showinfo(translate("msg_title_done"), translate("msg_done_extract_db", txt=out_txt))
@@ -401,7 +403,7 @@ def insert_db(db_path, txt_path):
 
         # Lê o TXT
         lines = []
-        with open(txt_path, "r", encoding="utf-8") as f:
+        with open(txt_path, "r", encoding="ansi") as f:
             for line in f:
                 line = line.strip()
                 if not line:
@@ -409,7 +411,7 @@ def insert_db(db_path, txt_path):
                 if ":" not in line:
                     continue
                 id_hex, text = line.split(":", 1)
-                text_bytes = text.replace("[BR]", "\n").encode("utf-8") + b"\x00"
+                text_bytes = text.replace("[BR]", "\n").encode("ansi") + b"\x00"
                 lines.append((id_hex, text_bytes))
 
         total_texts = len(lines)
@@ -422,7 +424,7 @@ def insert_db(db_path, txt_path):
                 size = len(text_bytes)
                 f.write(id_bytes_hex)            # 4 bytes ID
                 f.write(bytes([size]))       # 1 byte tamanho do texto
-                f.write(text_bytes)          # texto em UTF-8
+                f.write(text_bytes)          # texto em ANSI
             
             f.truncate()
 
