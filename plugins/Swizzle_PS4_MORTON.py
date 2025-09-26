@@ -93,72 +93,77 @@ def register_plugin(log_func, option_getter, host_language="pt_BR"):
     return get_plugin_info
 
 
-def calculate_morton_index_ps4(t: int, w: int, h: int) -> int:
+def calculate_morton_index_ps4(t: int, input_img_width: int, input_img_height: int) -> int:
     num1 = num2 = 1
     num3 = num4 = 0
-    img_w, img_h = w, h
-    while img_w > 1 or img_h > 1:
-        if img_w > 1:
+    img_width = input_img_width
+    img_height = input_img_height
+    while img_width > 1 or img_height > 1:
+        if img_width > 1:
             num3 += num2 * (t & 1)
-            t >>= 1
+            t   >>= 1
             num2 <<= 1
-            img_w >>= 1
-        if img_h > 1:
+            img_width >>= 1
+        if img_height > 1:
             num4 += num1 * (t & 1)
-            t >>= 1
+            t   >>= 1
             num1 <<= 1
-            img_h >>= 1
-    return num4 * w + num3
+            img_height >>= 1
+    return num4 * input_img_width + num3
 
+def swizzle_ps4(image_data: bytes, img_width: int, img_height: int,
+                block_width: int = 4, block_height: int = 4, block_data_size: int = 16) -> bytes:
+    swizzled = bytearray(len(image_data))
+    src_idx = 0
+    w_blocks = img_width  // block_width
+    h_blocks = img_height // block_height
 
-def swizzle_ps4(data: bytes, width: int, height: int, block_width=4, block_height=4, block_size=16) -> bytes:
-    out = bytearray(len(data))
-    src = 0
-    w_blocks = width  // block_width
-    h_blocks = height // block_height
     for y in range((h_blocks + 7) // 8):
         for x in range((w_blocks + 7) // 8):
             for t in range(64):
                 morton = calculate_morton_index_ps4(t, 8, 8)
-                dy, dx = divmod(morton, 8)
-                if (x*8+dx)<w_blocks and (y*8+dy)<h_blocks:
-                    dst = block_size * ((y*8+dy)*w_blocks + (x*8+dx))
-                    out[src:src+block_size] = data[dst:dst+block_size]
-                    src += block_size
-    return out
+                dy = morton // 8
+                dx = morton % 8
+                if (x*8 + dx) < w_blocks and (y*8 + dy) < h_blocks:
+                    dst = block_data_size * ((y*8 + dy) * w_blocks + (x*8 + dx))
+                    swizzled[src_idx:src_idx+block_data_size] = image_data[dst:dst+block_data_size]
+                    src_idx += block_data_size
+    return swizzled
 
+def unswizzle_ps4(image_data: bytes, img_width: int, img_height: int,
+                  block_width: int = 4, block_height: int = 4, block_data_size: int = 16) -> bytes:
+    unswizzled = bytearray(len(image_data))
+    src_idx = 0
+    w_blocks = img_width  // block_width
+    h_blocks = img_height // block_height
 
-def unswizzle_ps4(data: bytes, width: int, height: int, block_width=4, block_height=4, block_size=16) -> bytes:
-    out = bytearray(len(data))
-    src = 0
-    w_blocks = width  // block_width
-    h_blocks = height // block_height
     for y in range((h_blocks + 7) // 8):
         for x in range((w_blocks + 7) // 8):
             for t in range(64):
                 morton = calculate_morton_index_ps4(t, 8, 8)
-                dy, dx = divmod(morton, 8)
-                if (x*8+dx)<w_blocks and (y*8+dy)<h_blocks:
-                    dst = block_size * ((y*8+dy)*w_blocks + (x*8+dx))
-                    out[dst:dst+block_size] = data[src:src+block_size]
-                    src += block_size
-    return out
+                dy = morton // 8
+                dx = morton % 8
+                if (x*8 + dx) < w_blocks and (y*8 + dy) < h_blocks:
+                    dst = block_data_size * ((y*8 + dy) * w_blocks + (x*8 + dx))
+                    unswizzled[dst:dst+block_data_size] = image_data[src_idx:src_idx+block_data_size]
+                    src_idx += block_data_size
+    return unswizzled
 
 
-def round_up_multiple(val: int, mult: int) -> int:
-    return ((val + mult - 1) // mult) * mult
+def round_up_multiple(value: int, multiple: int) -> int:
+    return ((value + multiple - 1) // multiple) * multiple
 
 
 def process_file(input_path: str, output_path: str, mode: str, fmt: str):
     # Define tamanhos por formato
     if fmt == "DXT1":
-        block_size, header = 8, 128
+        block_data_size, header = 8, 128
     elif fmt == "DXT5":
-        block_size, header = 16, 128
+        block_data_size, header = 16, 128
     elif fmt == "BC7":
-        block_size, header = 16, 148
+        block_data_size, header = 16, 148
     elif fmt == "BGRA 8888":
-        block_size, header = 16, 148
+        block_data_size, header = 16, 148
     else:
         raise ValueError(translate("unsupported_format", fmt=fmt))
 
@@ -170,33 +175,41 @@ def process_file(input_path: str, output_path: str, mode: str, fmt: str):
 
     aligned_w = round_up_multiple(width,  32)
     aligned_h = round_up_multiple(height, 32)
-    unit_sz = block_size if fmt != "BGRA 8888" else 4
-    block_w = block_h = 4 if fmt != "BGRA 8888" else 1
-    w_blocks = aligned_w  // block_w
-    h_blocks = aligned_h // block_h
-    orig_wb  = width  // block_w
-    orig_hb  = height // block_h
+    block_w = aligned_w // 4
+    block_h = aligned_h // 4
 
-    padded = bytearray(w_blocks * h_blocks * unit_sz)
-    for y in range(orig_hb):
-        src_o = y * orig_wb * unit_sz
-        dst_o = y * w_blocks * unit_sz
-        padded[dst_o:dst_o+orig_wb*unit_sz] = data[src_o:src_o+orig_wb*unit_sz]
+    orig_block_w = width  // 4
+    orig_block_h = height // 4
 
-    if mode == translate("swizzle"):
-        full = swizzle_ps4(padded, aligned_w, aligned_h, block_size=unit_sz)
+    # Cria buffer com padding (zeros)
+    padded_data = bytearray(block_w * block_h * block_data_size)
+
+    # Copia dados originais linha por linha
+    for y in range(orig_block_h):
+        src_offset = y * orig_block_w * block_data_size
+        dst_offset = y * block_w * block_data_size
+        padded_data[dst_offset : dst_offset + (orig_block_w * block_data_size)] = \
+            data[src_offset : src_offset + (orig_block_w * block_data_size)]
+
+    if mode == 'Swizzle':
+        out = swizzle_ps4(padded_data, aligned_w, aligned_h,
+                          block_width=4, block_height=4,
+                          block_data_size=block_data_size)
     else:
-        full = unswizzle_ps4(padded, aligned_w, aligned_h, block_size=unit_sz)
-
-    result = bytearray(orig_wb * orig_hb * unit_sz)
-    for y in range(orig_hb):
-        src_o = y * w_blocks * unit_sz
-        dst_o = y * orig_wb * unit_sz
-        result[dst_o:dst_o+orig_wb*unit_sz] = full[src_o:src_o+orig_wb*unit_sz]
+        unswizzled = unswizzle_ps4(data, aligned_w, aligned_h,
+                                   block_width=4, block_height=4,
+                                   block_data_size=block_data_size)
+        # Remove o padding após o unswizzle
+        out = bytearray(orig_block_w * orig_block_h * block_data_size)
+        for y in range(orig_block_h):
+            src_offset = y * block_w * block_data_size
+            dst_offset = y * orig_block_w * block_data_size
+            out[dst_offset : dst_offset + (orig_block_w * block_data_size)] = \
+                unswizzled[src_offset : src_offset + (orig_block_w * block_data_size)]
 
     with open(output_path, "wb") as out_f:
         out_f.write(hdr)
-        out_f.write(result)
+        out_f.write(out)
 
 
 def choose_and_process():
