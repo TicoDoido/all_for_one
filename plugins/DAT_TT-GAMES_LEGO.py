@@ -372,11 +372,12 @@ def rebuild_dat(original_dat_name, extracted_folder, json_path, out_path):
             offsets_table.append((offset_now, len(data)))
 
             
-            if FILE_TYPE == 0:
-                if i < len(file_entries) - 1:
-                    pad = (ALIGN - (f.tell() % ALIGN)) % ALIGN
-                    if pad:
-                        f.write(b"\x00" * pad)
+            # Determina o alinhamento baseado no tipo de arquivo
+            current_align = 0x800 if FILE_TYPE == 1 else 0x200
+            if i < len(file_entries) - 1:
+                pad = (current_align - (f.tell() % current_align)) % current_align
+                if pad:
+                    f.write(b"\x00" * pad)
                         
             else:
                 ALIGN = 0x800
