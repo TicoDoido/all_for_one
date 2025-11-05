@@ -138,6 +138,7 @@ def determine_endianness(file_path):
         raise ValueError(f"{translate('error')}: {str(e)}")
 
 # ===================== MAIN FUNCTIONS =====================
+
 def extract_lxb_text(file_path, endian):
     """Extract text from LXB file"""
     try:
@@ -152,8 +153,8 @@ def extract_lxb_text(file_path, endian):
             file.seek(128)
             for _ in range(pointer_count):
                 file.seek(4, os.SEEK_CUR)  # Skip unknown bytes
-                pointer = struct.unpack(endian + 'I', file.read(4))[0]
                 pointer_pos = file.tell()
+                pointer = struct.unpack(endian + 'I', file.read(4))[0]
                 absolute_pos = pointer_pos + pointer
                 
                 if absolute_pos >= file_path.stat().st_size:
@@ -161,6 +162,10 @@ def extract_lxb_text(file_path, endian):
                     continue
                 
                 pointers.append(absolute_pos)
+
+            # Prepare marker
+            marker_bytes = translate("end_marker").encode('utf-8')
+            tab_repl = translate("tab_replacement").encode('utf-8')
 
             # Extract text blocks
             text_blocks = []
@@ -175,13 +180,14 @@ def extract_lxb_text(file_path, endian):
                     text_bytes += byte
                 
                 # Replace tabs with marker
-                text_bytes = text_bytes.replace(b'\x09', translate("tab_replacement").encode('utf-8'))
-                text_blocks.append(text_bytes)
+                text_bytes = text_bytes.replace(b'\x09', tab_repl)
+                
 
-        # Join blocks with end markers
-        joined_text = translate("end_marker").encode('utf-8') + b'\n'.join(text_blocks) + \
-                     translate("end_marker").encode('utf-8') + b'\n'
+                text_blocks.append(bytes(text_bytes) + marker_bytes)
         
+        # Join blocks with newline between them (cada bloco já tem seu end_marker)
+        joined_text = b'\n'.join(text_blocks) + b'\n'  # opcional: manter newline final
+
         # Save to TXT file
         output_path = file_path.with_suffix('.txt')
         logger(translate("writing_to", path=output_path))
@@ -191,6 +197,7 @@ def extract_lxb_text(file_path, endian):
         
     except Exception as e:
         raise Exception(translate("extraction_error", error=str(e)))
+
 
 def rebuild_lxb_from_txt(txt_path, endian):
     """Rebuild LXB file from TXT"""
@@ -203,19 +210,20 @@ def rebuild_lxb_from_txt(txt_path, endian):
         
         # Read and parse TXT file
         text_data = txt_path.read_bytes()
-        text_blocks = text_data.split(
-            translate("end_marker").encode('utf-8') + b'\n'
-        )
-        text_blocks = [block for block in text_blocks if block.strip()]
+        end_marker_b = translate("end_marker").encode('utf-8')
+        split_token = end_marker_b + b'\n'
+        text_blocks = text_data.split(split_token)
         
         # Process text blocks
         processed_blocks = []
+        tab_rep_b = translate("tab_replacement").encode('utf-8')
         for block in text_blocks:
-            block = block.replace(
-                translate("tab_replacement").encode('utf-8'), 
-                b'\x09'
-            )
+            block = block.replace(tab_rep_b, b'\x09')
             processed_blocks.append(block)
+        
+        # Remove trailing empty block(s) robustly (handles \r, \n, \x00)
+        while processed_blocks and processed_blocks[-1].strip(b'\r\n\x00') == b'':
+            processed_blocks.pop()
         
         with lxb_path.open('r+b') as file:
             # Read original structure
@@ -243,14 +251,16 @@ def rebuild_lxb_from_txt(txt_path, endian):
                 block_positions.append(current_pos)
                 current_pos += len(block) + 1
             
-            # Write remaining data
-            remaining_pos = file.tell()
-            file.write(remaining_data)
+            if remaining_data_pos != 0:
+                # Write remaining data
+                remaining_pos = file.tell()
+                file.write(remaining_data)
             file.truncate()
             
             # Update header
-            file.seek(4)
-            file.write(struct.pack(endian + 'I', remaining_pos - 4))
+            if remaining_data_pos != 0:
+                file.seek(4)
+                file.write(struct.pack(endian + 'I', remaining_pos - 4))
             
             # Update pointers
             file.seek(128)
@@ -264,6 +274,7 @@ def rebuild_lxb_from_txt(txt_path, endian):
         
     except Exception as e:
         raise Exception(translate("recreation_error", error=str(e)))
+
 
 # ===================== COMMAND HANDLERS =====================
 def extract_lxb_files():
