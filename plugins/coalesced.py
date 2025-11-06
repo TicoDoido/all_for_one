@@ -153,7 +153,7 @@ def read_binary_file(file_path):
             def read_name(file, char_count):
                 name_length = char_count * 2 + 2
                 name_data = file.read(name_length)
-                return name_data.decode('utf-16le').rstrip('\x00')
+                return name_data.decode('utf-16le', ).rstrip('\x00')
     
             output_dir = os.path.splitext(file_path)[0]
             os.makedirs(output_dir, exist_ok=True)
@@ -186,8 +186,11 @@ def read_binary_file(file_path):
                     for _ in range(num_items):
                         char_count_bytes_item = f.read(4)
                         raw_value_item = int.from_bytes(char_count_bytes_item, byteorder=byte_order)
-                        char_count_item = 4294967295 - raw_value_item
-                        item_name = read_name(f, char_count_item)
+                        if raw_value_item == 0:
+                            item_name = ""
+                        else:
+                            char_count_item = 4294967295 - raw_value_item
+                            item_name = read_name(f, char_count_item)
     
                         num_subitems = struct.unpack(f'{endianess}I', f.read(4))[0]
     
@@ -476,8 +479,11 @@ def rebuild_binary_file(original_file_path, output_file_path, extracted_folder):
                         # Ler o número de caracteres do nome do item
                         char_count_bytes_item = f.read(4)
                         raw_value_item = int.from_bytes(char_count_bytes_item, byteorder=ordem_dos_bytes)
-                        char_count_item = 4294967295 - raw_value_item
-                        read_name(f, char_count_item)  # Nome do item
+                        if raw_value_item == 0:
+                            char_count_item = ""
+                        else:
+                            char_count_item = 4294967295 - raw_value_item
+                            read_name(f, char_count_item)  # Nome do item
     
                         # Ler o número de subitens
                         num_subitems = struct.unpack(endianess + 'I', f.read(4))[0]
@@ -529,10 +535,13 @@ def rebuild_binary_file(original_file_path, output_file_path, extracted_folder):
                                 subitems = lines[1:]
         
                                 # Preparar e escrever o nome do item
-                                char_count_item = len(item_name)
-                                char_count_item_encoded = 4294967295 - char_count_item
-                                bin_file.write(struct.pack(endianess + 'I', char_count_item_encoded))
-                                bin_file.write(item_name.encode('utf-16le') + b'\x00\x00')
+                                if len(item_name) > 0:
+                                    char_count_item = len(item_name)
+                                    char_count_item_encoded = 4294967295 - char_count_item
+                                    bin_file.write(struct.pack(endianess + 'I', char_count_item_encoded))
+                                    bin_file.write(item_name.encode('utf-16le') + b'\x00\x00')
+                                else:
+                                    bin_file.write(struct.pack(endianess + 'I', 0))
         
                                 # Escrever o número de subitens
                                 bin_file.write(struct.pack(endianess + 'I', len(subitems)))
