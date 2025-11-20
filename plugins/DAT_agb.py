@@ -31,7 +31,8 @@ plugin_translations = {
         "invalid_hash": "Hash inválido na linha {line}: {hash}",
         "invalid_chunk": "RAWM não encontrado",
         "marker_not_found": "MARKER não encontrado após RAWM",
-        "txt_not_found": "Arquivo .txt não encontrado: {file}"
+        "txt_not_found": "Arquivo .txt não encontrado: {file}",
+        "compression_mode": "Modo de Compressão",
     },
     "en_US": {
         "plugin_name": "DAT Angry Birds Trilogy Text Files",
@@ -54,7 +55,8 @@ plugin_translations = {
         "invalid_hash": "Invalid hash on line {line}: {hash}",
         "invalid_chunk": "RAWM not found",
         "marker_not_found": "MARKER not found after RAWM",
-        "txt_not_found": "TXT file not found: {file}"
+        "txt_not_found": "TXT file not found: {file}",
+        "compression_mode": "Compression Mode",
     },
     "es_ES": {
         "plugin_name": "DAT Angry Birds Trilogy para archivos de texto",
@@ -77,7 +79,8 @@ plugin_translations = {
         "invalid_hash": "Hash inválido en línea {line}: {hash}",
         "invalid_chunk": "RAWM no encontrado",
         "marker_not_found": "MARKER no encontrado después de RAWM",
-        "txt_not_found": "Archivo .txt no encontrado: {file}"
+        "txt_not_found": "Archivo .txt no encontrado: {file}",
+        "compression_mode": "Modo de Compresión",
     }
 }
 
@@ -110,6 +113,11 @@ def register_plugin(log_func, option_getter, host_language="pt_BR"):
         return {
             "name": translate("plugin_name"),
             "description": translate("plugin_description"),
+            "options": [
+                {   "name": "modo_compactacao",
+                    "label": translate("compression_mode"),
+                    "values": [translate("zlib(X360)"), translate("deflate(PS3)")]}
+            ],
             "commands": [
                 {"label": translate("extract_strings"), "action": extract_command},
                 {"label": translate("reinsert_strings"), "action": reinsert_command}
@@ -232,6 +240,9 @@ def extract(input_path: Path):
     logger(translate("extraction_success", path=txt_path))
 
 def reinsert(input_path: Path):
+    
+    compression_mode = get_option("modo_compactacao")
+    
     raw_data = input_path.read_bytes()
     orig_off = find_chunk_offset(raw_data)
     header_original = raw_data[orig_off:orig_off+0x30]
@@ -250,10 +261,15 @@ def reinsert(input_path: Path):
     txt_content = txt_path.read_text(encoding='utf-8')
     loc_data = build_loc_from_txt(txt_content)
 
-    comp_obj = zlib.compressobj(level=9, wbits=-zlib.MAX_WBITS)
-    comp_data = comp_obj.compress(loc_data)
-    comp_data += comp_obj.flush()
-    comp_data += b'\x00\x01'   # seu sufixo
+    if compression_mode == "zlib":
+        comp_obj = zlib.compress(loc_data, level=9)
+        comp_data = comp_obj + b'\x00\x01'
+    
+    else:
+        comp_obj = zlib.compressobj(level=9, wbits=-zlib.MAX_WBITS)
+        comp_data = comp_obj.compress(loc_data)
+        comp_data += comp_obj.flush()
+        comp_data += b'\x00\x01'   # seu sufixo
 
     comp_size, decomp_size = len(comp_data), len(loc_data)
     ALIGN = 0x40
