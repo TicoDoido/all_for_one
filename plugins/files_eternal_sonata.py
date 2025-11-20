@@ -7,12 +7,13 @@ from pathlib import Path
 # ===================== TRANSLATIONS =====================
 plugin_translations = {
     "pt_BR": {
-        "plugin_name": "FILES arquivos (Eternal Sonata PS3)",
+        "plugin_name": "FILES arquivo de (Eternal Sonata PS3)",
         "plugin_description": "Extrai e recria textos de arquivos do jogo Eternal Sonata",
         "extract_file": "Extrair Arquivo",
         "select_files_file": "Selecione arquivo .FILES",
         "files_files": "Arquivos FILES",
         "all_files": "Todos os arquivos",
+        "log_magic_invalid": "Magic FILE não encontrado no início do arquivo.",
         "success": "Sucesso",
         "extraction_success": "Arquivos extraídos com sucesso!",
         "error": "Erro",
@@ -24,12 +25,13 @@ plugin_translations = {
         "file_extracted": "Arquivo extraído: {filename} -> {output_path}"
     },
     "en_US": {
-        "plugin_name": "FILES files (Eternal Sonata PS3)",
+        "plugin_name": "FILES file from (Eternal Sonata PS3)",
         "plugin_description": "Extracts and rebuilds text files from Eternal Sonata game",
         "extract_file": "Extract File",
         "select_files_file": "Select .FILES file",
         "files_files": "FILES Files",
         "all_files": "All files",
+        "log_magic_invalid": "FILE magic not found at file start.",
         "success": "Success",
         "extraction_success": "Files extracted successfully!",
         "error": "Error",
@@ -41,12 +43,13 @@ plugin_translations = {
         "file_extracted": "File extracted: {filename} -> {output_path}"
     },
     "es_ES": {
-        "plugin_name": "FILES archivos (Eternal Sonata PS3)",
+        "plugin_name": "FILES archivo de (Eternal Sonata PS3)",
         "plugin_description": "Extrae y recrea archivos de texto del juego Eternal Sonata",
         "extract_file": "Extraer Archivo",
         "select_files_file": "Seleccionar archivo .FILES",
         "files_files": "Archivos FILES",
         "all_files": "Todos los archivos",
+        "log_magic_invalid": "Magic FILE no encontrada al inicio del archivo.",
         "success": "Éxito",
         "extraction_success": "¡Archivos extraídos con éxito!",
         "error": "Error",
@@ -103,6 +106,12 @@ def extract_files_from_container(container_path):
         logger(translate("extracting_to", path=output_dir))
 
         with container_path.open('rb') as container:
+            
+            magic = container.read(4)
+            if magic != b'FILE':
+                log_fn(translate("log_magic_invalid"))
+                raise ValueError(translate("log_magic_invalid"))
+                
             # Read header information
             container.seek(8)
             num_files = struct.unpack('>I', container.read(4))[0]
@@ -121,10 +130,6 @@ def extract_files_from_container(container_path):
                 file_size = struct.unpack('>I', container.read(4))[0]
                 
                 header_offset += 48  # Move to next entry
-                
-                # Validate file position
-                if file_start == 0 or file_size == 0:
-                    continue
                 
                 logger(translate("processing_file", file=filename))
                 

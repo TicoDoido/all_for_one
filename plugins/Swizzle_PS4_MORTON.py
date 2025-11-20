@@ -1,3 +1,4 @@
+# Swizzle code from REVERSE BOX https://github.com/bartlomiejduda/ReverseBox
 import os
 import struct
 import threading
@@ -215,15 +216,16 @@ def process_file(input_path: str, output_path: str, mode: str, fmt: str):
 def choose_and_process():
     mode = get_option("var_mode")
     fmt  = get_option("var_format")
-    path = filedialog.askopenfilename(
+    paths = filedialog.askopenfilenames(
         title=translate("select_file"),
         filetypes=[(translate("dds_files"), "*.dds"), (translate("all_files"), "*.*")]
     )
-    if not path:
+    if not paths:
         return
 
     try:
-        threading.Thread(target=process_file, args=(path, path, mode, fmt), daemon=True).start()
-        messagebox.showinfo(translate("success_title"), translate("success_message", path=path))
+        for path in paths:
+            threading.Thread(target=process_file, args=(path, path, mode, fmt), daemon=True).start()
+            messagebox.showinfo(translate("success_title"), translate("success_message", path=path))
     except Exception as e:
         messagebox.showerror(translate("error_title"), translate("error_message", error=str(e)))

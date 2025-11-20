@@ -106,32 +106,45 @@ def read_binary_file(file_path):
                     
                     filename_length = struct.unpack('>I', filename_length_data)[0]
                     filename_data = f.read(filename_length)
-                    filename = filename_data.strip(b'\x00').decode('utf-8')
+                    filename = filename_data.strip(b'\x00').decode('ansi')
                 
                     safe_path = os.path.join(output_base_dir, filename.lstrip('..\\'))
                     full_path = os.path.abspath(safe_path)
                     os.makedirs(os.path.dirname(full_path), exist_ok=True)
                 
                     num_items = struct.unpack('>I', f.read(4))[0]
+                        
                 
-                    with open(full_path, 'w', encoding='utf-8') as out_file:
-                        for _ in range(num_items):
-                            item_name_length = struct.unpack('>I', f.read(4))[0]
-                            item_name = f.read(item_name_length).strip(b'\x00').decode('utf-8')
-                            out_file.write(f"[{item_name}]\n")
+                    with open(full_path, 'w', encoding='ansi') as out_file:
+                        
+                        if num_items == 0:
+                            out_file.write("")
+                        
+                        else:
+                            
+                            for _ in range(num_items):
+                                item_name_length = struct.unpack('>I', f.read(4))[0]
+                                item_name = f.read(item_name_length).strip(b'\x00').decode('ansi', errors='ignore')
+                                item_name = item_name.replace("\n", "\\n")
+                                item_name = item_name.replace("\r", "\\r")
+                                out_file.write(f"[{item_name}]\n")
                     
-                            num_subitems = struct.unpack('>I', f.read(4))[0]
-                            for i in range(num_subitems):
-                                subitem_title_length = struct.unpack('>I', f.read(4))[0]
-                                subitem_title = f.read(subitem_title_length).strip(b'\x00').decode('utf-8')
+                                num_subitems = struct.unpack('>I', f.read(4))[0]
+                                for i in range(num_subitems):
+                                    subitem_title_length = struct.unpack('>I', f.read(4))[0]
+                                    subitem_title = f.read(subitem_title_length).strip(b'\x00').decode('ansi', errors='ignore')
+                                    subitem_title = subitem_title.replace("\n", "\\n")
+                                    subitem_title = subitem_title.replace("\r", "\\r")
                             
-                                subitem_value_length = struct.unpack('>I', f.read(4))[0]
-                                subitem_value = f.read(subitem_value_length).strip(b'\x00').decode('utf-8', errors='ignore')
+                                    subitem_value_length = struct.unpack('>I', f.read(4))[0]
+                                    subitem_value = f.read(subitem_value_length).strip(b'\x00').decode('ansi', errors='ignore')
+                                    subitem_value = subitem_value.replace("\n", "\\n")
+                                    subitem_value = subitem_value.replace("\r", "\\r")
                             
-                                out_file.write(f"{subitem_title}={subitem_value}\n")
+                                    out_file.write(f"{subitem_title}={subitem_value}\n")
                                 
-                            if _ + 1 < num_items:
-                                out_file.write("\n")
+                                if _ + 1 < num_items:
+                                    out_file.write("\n")
                     
                     logger(f"Arquivo extraído: {full_path}")
             
@@ -366,15 +379,19 @@ def rebuild_binary_file(original_file_path, output_file_path, extracted_folder):
                     file_names.append(name_data)
                     
                     num_items = struct.unpack('>I', orig.read(4))[0]
-                    for _ in range(num_items):
-                        item_name_len = struct.unpack('>I', orig.read(4))[0]
-                        orig.seek(item_name_len, 1)
-                        sub_count = struct.unpack('>I', orig.read(4))[0]
-                        for __ in range(sub_count):
-                            key_len = struct.unpack('>I', orig.read(4))[0]
-                            orig.seek(key_len, 1)
-                            val_len = struct.unpack('>I', orig.read(4))[0]
-                            orig.seek(val_len, 1)
+                   
+                        
+                    if num_items != 0:
+                        
+                        for _ in range(num_items):
+                            item_name_len = struct.unpack('>I', orig.read(4))[0]
+                            orig.seek(item_name_len, 1)
+                            sub_count = struct.unpack('>I', orig.read(4))[0]
+                            for __ in range(sub_count):
+                                key_len = struct.unpack('>I', orig.read(4))[0]
+                                orig.seek(key_len, 1)
+                                val_len = struct.unpack('>I', orig.read(4))[0]
+                                orig.seek(val_len, 1)
             
             with open(output_file_path, 'wb') as out:
                 out.write(struct.pack('>I', len(file_names)))
@@ -389,37 +406,56 @@ def rebuild_binary_file(original_file_path, output_file_path, extracted_folder):
                     if not file_path.exists():
                         raise FileNotFoundError(translate("file_not_found", file=str(file_path)))
                         
-                # Processa arquivo INI
-                with open(file_path, 'r', encoding='ansi') as f:
-                    blocks = [b.strip() for b in f.read().split('\n\n') if b.strip()]
+                    # Processa arquivo INI
+                    with open(file_path, 'r', encoding='ansi') as f:
+                        blocks = f.read().split('\n\n')
+                        if blocks and blocks[-1].strip() == "":
+                            blocks.pop()
                 
-                out.write(struct.pack('>I', len(blocks)))
+                    out.write(struct.pack('>I', len(blocks)))
                 
-                for block in blocks:
-                    lines = [l.strip() for l in block.split('\n') if l.strip()]
-                    if not lines:
-                        continue
+                    for block in blocks:
+                        lines = block.split('\n')
                         
-                    item_name = lines[0][1:-1]  # Remove []
-                    item_name_enc = item_name.encode('ansi') + b'\x00'
-                    out.write(struct.pack('>I', len(item_name_enc)))
-                    out.write(item_name_enc)
+                        if lines:
+                            item_name = lines[0][1:-1]  # Remove []
+                            item_name_enc = item_name.encode('ansi') + b'\x00'
+                            out.write(struct.pack('>I', len(item_name_enc)))
+                            out.write(item_name_enc)
                     
-                    subitems = lines[1:]
-                    out.write(struct.pack('>I', len(subitems)))
-                    
-                    for line in subitems:
-                        if '=' not in line:
-                            continue
+                            subitems = lines[1:]
                             
-                        key, value = line.split('=', 1)
-                        key_enc = key.encode('ansi') + b'\x00'
-                        value_enc = value.encode('ansi') + b'\x00'
+                            if subitems and subitems[-1].strip() == "":
+                                subitems.pop()
+                                
+                            out.write(struct.pack('>I', len(subitems)))
+                    
+                            for line in subitems:
+                                
+                                if '=' not in line:
+                                    continue
+                            
+                                key, value = line.split('=', 1)
+                                
+                                key = key.replace("\\n", "\n").replace("\\r", "\r")
+                                value = value.replace("\\n", "\n").replace("\\r", "\r")
                         
-                        out.write(struct.pack('>I', len(key_enc)))
-                        out.write(key_enc)
-                        out.write(struct.pack('>I', len(value_enc)))
-                        out.write(value_enc)
+                                if key == "":
+                                    out.write(struct.pack('>I', 0))
+                                else:
+                                    key_enc = key.encode('ansi')
+                                    out.write(struct.pack('>I', len(key_enc) + 1))
+                                    out.write(key_enc + b'\x00')
+                            
+                                if value == "":
+                                    out.write(struct.pack('>I', 0))
+                                else:
+                                    value_enc = value.encode('ansi')
+                                    out.write(struct.pack('>I', len(value_enc) + 1))
+                                    out.write(value_enc + b'\x00')
+                                
+                        else:
+                            out.write(struct.pack('>I', 0))
             
             messagebox.showinfo(
                 translate("success"),

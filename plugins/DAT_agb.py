@@ -250,7 +250,11 @@ def reinsert(input_path: Path):
     txt_content = txt_path.read_text(encoding='utf-8')
     loc_data = build_loc_from_txt(txt_content)
 
-    comp_data = zlib.compress(loc_data, -zlib.MAX_WBITS) + b'\x00\x01'
+    comp_obj = zlib.compressobj(level=9, wbits=-zlib.MAX_WBITS)
+    comp_data = comp_obj.compress(loc_data)
+    comp_data += comp_obj.flush()
+    comp_data += b'\x00\x01'   # seu sufixo
+
     comp_size, decomp_size = len(comp_data), len(loc_data)
     ALIGN = 0x40
     pad1 = (-len(prefix)) % ALIGN
