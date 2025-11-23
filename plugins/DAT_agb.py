@@ -261,9 +261,8 @@ def reinsert(input_path: Path):
     txt_content = txt_path.read_text(encoding='utf-8')
     loc_data = build_loc_from_txt(txt_content)
 
-    if compression_mode == "zlib":
-        comp_obj = zlib.compress(loc_data, level=9)
-        comp_data = comp_obj + b'\x00\x01'
+    if compression_mode == "zlib(X360)":
+        comp_data = zlib.compress(loc_data, level=9)
     
     else:
         comp_obj = zlib.compressobj(level=9, wbits=-zlib.MAX_WBITS)
