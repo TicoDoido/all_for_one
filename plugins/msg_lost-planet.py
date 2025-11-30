@@ -112,7 +112,6 @@ def register_plugin(log_func, option_getter, host_language="pt_BR"):
         ]
     }
 
-
 # Tabela para Dead Rising Xbox 360
 DEAD_RISING_TABLE = {
     b'\x01\x00\x00\x00\x00\x04': b'[FIM]\n',
@@ -233,6 +232,7 @@ DEAD_RISING_TABLE = {
     b'\xFA\x00\xFE\x00\x3F\x00': 'ú'.encode('utf-8'),  # ú
     b'\xF9\x00\xFC\x00\x3F\x00': 'ù'.encode('utf-8'),  # ù
 }
+
 # Tabela de conversão completa
 LOST_PLANET_TABLE = {
     b'\x00\x01\x00\x00\x00\x04': b'[FIM]\n',
@@ -357,6 +357,7 @@ LOST_PLANET_TABLE = {
     b'\x00\xF6\x00\x84\x7E\x02': 'ö'.encode('utf-8'),  # ö
     b'\x00\xFA\x00\xA4\x7E\x02': 'ú'.encode('utf-8'),  # ú
 }
+
 # ===================== MAIN FUNCTIONS =====================
 def convert_msg_to_text(msg_path, txt_path):
     """Convert MSG file to TXT using appropriate game table"""
@@ -407,64 +408,73 @@ def convert_text_to_msg(txt_path, msg_path):
         
         logger(translate("processing_file", file=txt_path.name))
         
-        # Create reverse lookup table
+        # Create reverse lookup table: decoded string -> 6-byte code
         reverse_table = {v.decode('utf-8', errors='replace'): k for k, v in table.items()}
         
-        with txt_path.open('r', encoding='utf-8') as txt_file, \
-             msg_path.open('r+b') as bin_file:
+        # Read full text
+        text = txt_path.read_text(encoding='utf-8')
+        
+        # Ensure .msg exists; if not, create a minimal header with text_start = 64
+        if not msg_path.exists():
+            with msg_path.open('wb') as f:
+                # write magic
+                f.write(b'MSG1')
+                # text_start = 64
+                f.write(struct.pack(f'{endian}I', 64))
+                # file size placeholder (will update later)
+                f.write(struct.pack(f'{endian}I', 0))
+                # pad remaining header to 64 bytes
+                remaining = 64 - (4 + 4 + 4)
+                f.write(b'\x00' * remaining)
+        
+        with msg_path.open('r+b') as bin_file:
+            # Start writing after header (64)
+            bin_file.seek(64)
             
-            # Process text character by character
-            buffer = ''
-            bin_file.seek(64)  # Start writing after header
-            
-            while True:
-                char = txt_file.read(1)
-                if not char:
-                    break
-                    
-                buffer += char
-                
-                # Handle special sequences
-                if buffer.endswith('['):
-                    next_chars = txt_file.read(3)
-                    if not next_chars:
-                        break
-                        
-                    buffer += next_chars
-                    
-                    # Check for [FIM] marker
-                    if buffer.endswith('FIM'):
-                        end_marker = txt_file.read(2)
-                        buffer += end_marker
-                        
-                        if end_marker == ']\n':
-                            block = table.get(b'[FIM]\n'.encode('utf-8'))
-                        else:
-                            buffer = buffer[:-5]
-                    else:
-                        # Handle hex sequences
-                        buffer = buffer[:-5]
-                        hex_seq = next_chars + txt_file.read(9)
-                        buffer += hex_seq
-                        
-                        try:
-                            block = bytes.fromhex(hex_seq)
-                            txt_file.read(1)  # Skip closing bracket
-                        except ValueError:
-                            continue
-                
-                elif char in reverse_table:
-                    block = reverse_table[char]
-                else:
+            i = 0
+            L = len(text)
+            while i < L:
+                # Handle full marker [FIM]\n first
+                if text.startswith('[FIM]\n', i):
+                    key = '[FIM]\n'
+                    block = reverse_table.get(key)
+                    if block is None:
+                        # If table does not have mapping for that exact string, try bytes fallback
+                        raise ValueError("Mapping para '[FIM]\\n' não encontrada na tabela reversa.")
+                    bin_file.write(block)
+                    i += len(key)
                     continue
-                    
-                bin_file.write(block)
+                
+                # If starts with '[' try to parse hex sequence inside brackets
+                if text[i] == '[':
+                    end_idx = text.find(']', i)
+                    if end_idx != -1:
+                        inner = text[i+1:end_idx].replace(' ', '')
+                        # if inner looks like hex (even length and hex chars), try convert
+                        if len(inner) % 2 == 0 and all(c in '0123456789abcdefABCDEF' for c in inner):
+                            try:
+                                block = bytes.fromhex(inner)
+                                bin_file.write(block)
+                                i = end_idx + 1
+                                continue
+                            except ValueError:
+                                # fallthrough and treat '[' as literal if hex parse fails
+                                pass
+                # Otherwise single character mapping
+                ch = text[i]
+                block = reverse_table.get(ch)
+                if block is not None:
+                    bin_file.write(block)
+                else:
+                    # caractere não mapeado: log e ignore (ou poderia escrever um placeholder)
+                    logger(f"Caractere sem mapeamento em {txt_path.name}: {repr(ch)} (ignorado)")
+                i += 1
             
-            # Update file size in header
+            # Update file size in header (offset 8)
             file_size = bin_file.tell()
             bin_file.seek(8)
             bin_file.write(struct.pack(f'{endian}I', file_size))
-            
+        
         return True
         
     except Exception as e:
@@ -528,6 +538,7 @@ def rebuild_txt_to_msg():
                 elif msg_path_no_ext.exists():
                     msg_path = msg_path_no_ext
                 else:
+                    # If no .msg exists, we'll create one with the same base name
                     msg_path = msg_path_com_ext
                 
                 if convert_text_to_msg(txt_path, msg_path):
