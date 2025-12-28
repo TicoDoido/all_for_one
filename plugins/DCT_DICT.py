@@ -102,12 +102,12 @@ def register_plugin(log_func, option_getter, host_language="pt_BR"):
                 {
                     "name": "extract_encoding",
                     "label": translate("extract_encoding"),
-                    "values": [translate("utf8"), translate("cp1252")]
+                    "values": ["utf-8","cp1252"]
                 },
                 {
                     "name": "reinsert_encoding",
                     "label": translate("reinsert_encoding"),
-                    "values": [translate("utf8"), translate("cp1252")]
+                    "values": ["utf-8", "cp1252"]
                 }
             ],
             "commands": [
@@ -142,6 +142,7 @@ def encode_texto(text, encoding_choice):
         return text.encode("cp1252", errors="ignore")
 
 def ler_textos_do_txt(caminho_txt):
+    reinsert_encoding = get_option("reinsert_encoding")
     """Lê o .txt com codificação UTF-8 e retorna mapping {idx: text}."""
     with open(caminho_txt, "r", encoding=reinsert_encoding, errors="ignore") as f:
         content = f.read()
@@ -182,9 +183,7 @@ def extract_texts():
                 inicio_ponteiros = 0x14
                 f.seek(24)
                 inicio_textos = struct.unpack("<I", f.read(4))[0] + 25
-                logger(f"Inicio dos textos: {inicio_textos}")
                 pointer_block_size = inicio_textos - inicio_ponteiros
-                logger(f"Tamanho do bloco de ponteiros: {pointer_block_size}")
 
                 textos = []
                 idx_logico = 1
@@ -203,10 +202,8 @@ def extract_texts():
                         break
                     
                     chunk_ptr = f.read(4)
-                    logger(f"Posição leitura atual: {pos_atual}")
                     ponteiro_rel = struct.unpack("<I", chunk_ptr)[0]
                     offset_texto = ponteiro_rel + pos_atual + 1
-                    logger(f"Ponteiro absoluto: {offset_texto}")
                     pos_atual += 4
 
                     f.seek(offset_texto)
