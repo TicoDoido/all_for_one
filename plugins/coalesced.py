@@ -4,9 +4,13 @@ import threading
 from tkinter import filedialog, messagebox
 from pathlib import Path
 
-# Função de tradução dummy
-def translate(key, **kwargs):
-    translations = {
+plugin_translations = {
+    "pt_BR": {
+        "plugin_name": "Coalesced UE3 - Extrator e Reinseridor",
+        "plugin_description": "Extrai e reinsere arquivos INI de Coalesced (Unreal Engine 3)",
+        "version": "Versão do Coalesced",
+        "extract_command": "Extrair Arquivo",
+        "recreate_command": "Reconstruir Arquivo",
         "extracting_to": "Extraindo para: {path}",
         "success": "Sucesso",
         "extraction_success": "Extração concluída com sucesso!",
@@ -16,31 +20,83 @@ def translate(key, **kwargs):
         "file_not_found": "Arquivo não encontrado: {file}",
         "select_original_file": "Selecione o arquivo binário original",
         "select_extracted_folder": "Selecione a pasta extraída",
-        "select_output_file": "Selecione onde salvar o novo arquivo"
+        "select_output_file": "Selecione onde salvar o novo arquivo",
+        "recreating_to": "Recriando: {path}"
+    },
+    "en_US": {
+        "plugin_name": "Coalesced UE3 - Extractor and Reinserter",
+        "plugin_description": "Extracts and reinserts INI files from Coalesced (Unreal Engine 3)",
+        "version": "Coalesced Version",
+        "extract_command": "Extract File",
+        "recreate_command": "Rebuild File",
+        "extracting_to": "Extracting to: {path}",
+        "success": "Success",
+        "extraction_success": "Extraction completed successfully!",
+        "extraction_error": "Extraction error: {error}",
+        "recreation_success": "File recreated successfully!",
+        "recreation_error": "Recreation error: {error}",
+        "file_not_found": "File not found: {file}",
+        "select_original_file": "Select original binary file",
+        "select_extracted_folder": "Select extracted folder",
+        "select_output_file": "Select where to save the new file",
+        "recreating_to": "Recreating: {path}"
+    },
+    "es_ES": {
+        "plugin_name": "Coalesced UE3 - Extractor y Reinseridor",
+        "plugin_description": "Extrae y reinserte archivos INI de Coalesced (Unreal Engine 3)",
+        "version": "Versión de Coalesced",
+        "extract_command": "Extraer Archivo",
+        "recreate_command": "Reconstruir Archivo",
+        "extracting_to": "Extrayendo a: {path}",
+        "success": "Éxito",
+        "extraction_success": "¡Extracción completada con éxito!",
+        "extraction_error": "Error en extracción: {error}",
+        "recreation_success": "¡Archivo recreado con éxito!",
+        "recreation_error": "Error en recreación: {error}",
+        "file_not_found": "Archivo no encontrado: {file}",
+        "select_original_file": "Seleccionar archivo binario original",
+        "select_extracted_folder": "Seleccionar carpeta extraída",
+        "select_output_file": "Seleccionar dónde guardar el nuevo archivo",
+        "recreating_to": "Recreando: {path}"
     }
-    return translations.get(key, key).format(**kwargs)
+}
 
-# Variáveis globais
+# Plugin global variables
 logger = print
+current_language = "pt_BR"
 get_option = lambda name: None
 
+def translate(key, **kwargs):
+    """Internal plugin translation function"""
+    lang_dict = plugin_translations.get(current_language, plugin_translations["pt_BR"])
+    translation = lang_dict.get(key, key)
+   
+    if kwargs:
+        try:
+            return translation.format(**kwargs)
+        except:
+            return translation
+    return translation
+
 def register_plugin(log_func, option_getter, host_language="pt_BR"):
-    global logger, get_option
+    global logger, get_option, current_language
     logger = log_func or print
     get_option = option_getter or (lambda name: None)
+    current_language = host_language
+    
     return {
-        "name": "COALESCED Arquivo Unreal Engine 3 PS3/XBOX 360/N. Switch",
-        "description": "Extrai e recria arquivos COALESCED de jogos feitos na Unreal Engine 3 PS360/Switch.",
+        "name": translate("plugin_name"),
+        "description": translate("plugin_description"),
         "options": [
             {
                 "name": "tipo_arquivo",
-                "label": "Versão",
-                "values": ["1.0", "2.0", "3.0"]  # Corrigido para 3 valores distintos
+                "label": translate("version"),
+                "values": ["1.0", "2.0", "3.0"]
             }
         ],
         "commands": [
-            {"label": "Extrair Arquivo", "action": process_file},
-            {"label": "Reconstruir Arquivo", "action": reprocess_file},
+            {"label": translate("extract_command"), "action": process_file},
+            {"label": translate("recreate_command"), "action": reprocess_file},
         ]
     }
 
