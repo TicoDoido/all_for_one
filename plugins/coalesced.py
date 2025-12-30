@@ -300,12 +300,12 @@ def read_binary_file(file_path):
                                     total_items_subitems = len(subitems)
                                     out_file.write(f"{sub_item_1}=")
                                     if index < total_items -1:
-                                        out_file.write(f'"{sub_item_2}"\n')
+                                        out_file.write(f"{sub_item_2}\n")
                                     else:
                                         if i < total_items_subitems -1:
-                                            out_file.write(f'"{sub_item_2}"\n')
+                                            out_file.write(f"{sub_item_2}\n")
                                         else:
-                                            out_file.write(f'"{sub_item_2}"')
+                                            out_file.write(f"{sub_item_2}")
                             
                                 # Apenas adicione a quebra de linha se não for o último item
                                 if index < total_items -1:
@@ -321,12 +321,12 @@ def read_binary_file(file_path):
                                         total_items_subitems = len(subitems)
                                         out_file.write(f"{sub_item_1}=")
                                         if index < total_items -1:
-                                            out_file.write(f'"{sub_item_2}"\n')
+                                            out_file.write(f"{sub_item_2}\n")
                                         else:
                                             if i < total_items_subitems -1:
-                                                out_file.write(f'"{sub_item_2}"\n')
+                                                out_file.write(f"{sub_item_2}\n")
                                             else:
-                                                out_file.write(f'"{sub_item_2}"')
+                                                out_file.write(f"{sub_item_2}")
                                     # Apenas adicione a quebra de linha se não for o último item
                                     if index < total_items -1:
                                         out_file.write(f"\n")
