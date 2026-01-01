@@ -187,13 +187,32 @@ def read_binary_file(file_path):
                     
                                 num_subitems = struct.unpack('>I', f.read(4))[0]
                                 for i in range(num_subitems):
-                                    subitem_title_length = struct.unpack('>I', f.read(4))[0]
-                                    subitem_title = f.read(subitem_title_length).strip(b'\x00').decode('ansi', errors='ignore')
+                                    
+                                    read4sub1 = f.read(4)
+                                    
+                                    if read4sub1[0] == 0xFF:
+                                        char_count = struct.unpack('>I', read4sub1)[0]
+                                        subitem_title_length = (4294967295 - char_count) * 2 + 2
+                                        subitem_title = f.read(subitem_title_length)
+                                        subitem_title = subitem_title.decode('utf-16le', ).rstrip('\x00')
+                                        
+                                    else:
+                                        subitem_title_length = struct.unpack('>I', read4sub1)[0]
+                                        subitem_title = f.read(subitem_title_length).strip(b'\x00').decode('ansi', errors='ignore')
                                     subitem_title = subitem_title.replace("\n", "\\n")
                                     subitem_title = subitem_title.replace("\r", "\\r")
                             
-                                    subitem_value_length = struct.unpack('>I', f.read(4))[0]
-                                    subitem_value = f.read(subitem_value_length).strip(b'\x00').decode('ansi', errors='ignore')
+                                    read4sub2 = f.read(4)
+                                    
+                                    if read4sub2[0] == 0xFF:
+                                        char_count = struct.unpack('>I', read4sub2)[0]
+                                        subitem_value_length = (4294967295 - char_count) * 2 + 2
+                                        subitem_value = f.read(subitem_value_length)
+                                        subitem_value = subitem_value.decode('utf-16le', ).rstrip('\x00')
+                                        
+                                    else:
+                                        subitem_value_length = struct.unpack('>I', read4sub2)[0]
+                                        subitem_value = f.read(subitem_value_length).strip(b'\x00').decode('ansi', errors='ignore')
                                     subitem_value = subitem_value.replace("\n", "\\n")
                                     subitem_value = subitem_value.replace("\r", "\\r")
                             
@@ -444,9 +463,25 @@ def rebuild_binary_file(original_file_path, output_file_path, extracted_folder):
                             orig.seek(item_name_len, 1)
                             sub_count = struct.unpack('>I', orig.read(4))[0]
                             for __ in range(sub_count):
-                                key_len = struct.unpack('>I', orig.read(4))[0]
+                                
+                                read4key = orig.read(4)
+                            
+                                if read4key[0] == 0xFF:
+                                    char_count = struct.unpack('>I', read4key)[0]
+                                    key_len = (4294967295 - char_count) * 2 + 2
+                                else:
+                                    key_len = struct.unpack('>I', read4key)[0]
+                                    
                                 orig.seek(key_len, 1)
-                                val_len = struct.unpack('>I', orig.read(4))[0]
+                                
+                                read4val = orig.read(4)
+                                
+                                if read4val[0] == 0xFF:
+                                    char_count = struct.unpack('>I', read4val)[0]
+                                    val_len = (4294967295 - char_count) * 2 + 2
+                                else:
+                                    val_len = struct.unpack('>I', read4val)[0]
+                                
                                 orig.seek(val_len, 1)
             
             with open(output_file_path, 'wb') as out:
@@ -506,6 +541,8 @@ def rebuild_binary_file(original_file_path, output_file_path, extracted_folder):
                                 if value == "":
                                     out.write(struct.pack('>I', 0))
                                 else:
+                                    if value.startswith('"') and value.endswith('"'):
+                                        value = value[1:-1]
                                     value_enc = value.encode('ansi')
                                     out.write(struct.pack('>I', len(value_enc) + 1))
                                     out.write(value_enc + b'\x00')
