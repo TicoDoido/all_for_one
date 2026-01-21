@@ -1,4 +1,5 @@
 # Originalmente feito por Denis Moreno
+# Golden Axe Beast Rider PS3 USM
 import struct
 import re
 import threading
@@ -478,4 +479,5 @@ def reinsert_subtitles():
                 translate("unexpected_error", error=str(e))
             )
     
+
     threading.Thread(target=reinsertion_thread, daemon=True).start()
