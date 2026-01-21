@@ -193,8 +193,8 @@ def read_binary_file(file_path):
                                     if read4sub1[0] == 0xFF:
                                         char_count = struct.unpack('>I', read4sub1)[0]
                                         subitem_title_length = (4294967295 - char_count) * 2 + 2
-                                        subitem_title = f.read(subitem_title_length)
-                                        subitem_title = subitem_title.decode('utf-16le', ).rstrip('\x00')
+                                        subitem_title = f.read(subitem_title_length).decode('utf-16le', ).rstrip('\x00')
+                                        #subitem_title = subitem_title.decode('utf-16le', ).rstrip('\x00')
                                         
                                     else:
                                         subitem_title_length = struct.unpack('>I', read4sub1)[0]
@@ -207,8 +207,8 @@ def read_binary_file(file_path):
                                     if read4sub2[0] == 0xFF:
                                         char_count = struct.unpack('>I', read4sub2)[0]
                                         subitem_value_length = (4294967295 - char_count) * 2 + 2
-                                        subitem_value = f.read(subitem_value_length)
-                                        subitem_value = subitem_value.decode('utf-16le', ).rstrip('\x00')
+                                        subitem_value = f.read(subitem_value_length).decode('utf-16le', ).rstrip('\x00')
+                                        #subitem_value = subitem_value_bytes.decode('utf-16le', ).rstrip('\x00')
                                         
                                     else:
                                         subitem_value_length = struct.unpack('>I', read4sub2)[0]
