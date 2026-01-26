@@ -88,7 +88,7 @@ def unlzss(src: bytes, parameters: Optional[str] = None) -> bytes:
 # ----------------------------
 # Simple compressor
 # ----------------------------
-ddef lzss_compress(data: bytes, parameters: Optional[str] = None) -> bytes:
+def lzss_compress(data: bytes, parameters: Optional[str] = None) -> bytes:
     EI, EJ, P, _, init_chr = parse_params(parameters)
 
     N = (EI if EI >= 16 else 1 << EI)
@@ -258,4 +258,5 @@ ddef lzss_compress(data: bytes, parameters: Optional[str] = None) -> bytes:
         out.extend(code_buf[:code_buf_ptr])
 
     return bytes(out)
+
 
